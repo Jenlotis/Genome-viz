@@ -1,0 +1,27 @@
+.nav-pills .nav-link.active{
+    color: black;
+    background-color: #81FFC9;
+    margin-left: 10px;
+    margin-right: 10px;
+    margin-bottom: 10px;
+}
+
+.btn-primary{
+    color: black;
+    border-color: #81FFC9;
+    background-color: #81FFC9;
+}
+
+.btn-primary:hover{
+    color: black;
+    border-color: #78ECBB;
+    background-color: #78ECBB;
+}
+
+.btn-primary:not(:disabled):not(.disabled):active,
+.btn-primary:not(:disabled):not(.disabled).active,
+.show>.btn-primary.dropdown-toggle {
+    color: #black;
+    background-color: #68CDA3;
+    border-color: #68CDA3;
+}
