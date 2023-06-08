@@ -46,11 +46,12 @@ def known_range(df, chr_array):
 
 
 def make_chr_data(base_df, param_df, codes_list):
+    trace_names = []
     data = [{'start': 0,
              'end': base_df['end'].max(),
              'color': 'black',
              'id': 'base',
-             'name': 'base'}]
+             'name': 'No data'}]
     ann_df = base_df[base_df['protein_id'].isin(codes_list)]
     both_df = param_df[param_df['protein_id'].isin(codes_list)]
     grey_df = pd.merge(base_df,
@@ -67,8 +68,8 @@ def make_chr_data(base_df, param_df, codes_list):
         data.append({'start': row['start'],
                      'end': row['end'],
                      'color': '#AFB0B0',
-                     'id': row['protein_id'],
-                     'name': row['name']})
+                     'id': f"{row['protein_id']} ({row['name']})",
+                     'name': 'Outside scope'})
     for index, row in pd.merge(param_df,
                                both_df,
                                indicator=True,
@@ -77,8 +78,8 @@ def make_chr_data(base_df, param_df, codes_list):
         data.append({'start': row['start'],
                      'end': row['end'],
                      'color': 'red',
-                     'id': row['protein_id'],
-                     'name': row['name']})
+                     'id': f"{row['protein_id']} ({row['name']})",
+                     'name': 'Filtered'})
     for index, row in pd.merge(ann_df,
                                both_df,
                                indicator=True,
@@ -87,21 +88,27 @@ def make_chr_data(base_df, param_df, codes_list):
         data.append({'start': row['start'],
                      'end': row['end'],
                      'color': 'blue',
-                     'id': row['protein_id'],
-                     'name': row['name']})
+                     'id': f"{row['protein_id']} ({row['name']})",
+                     'name': 'User\'s choice'})
     for index, row in both_df.iterrows():
         data.append({'start': row['start'],
                      'end': row['end'],
                      'color': 'purple',
-                     'id': row['protein_id'],
-                     'name': row['name']})
+                     'id': f"{row['protein_id']} ({row['name']})",
+                     'name': 'Filtered and user\'s choice'})
     return data
 
 
 def broken_bars(data, ystart, yh):
     fig_data = []
     trace_dict = {}
+    trace_names = []
     for i, square in enumerate(data):
+        if square['name'] not in trace_names:
+            flag = True
+            trace_names.append(square['name'])
+        else:
+            flag = False
         trace_dict[i] = square['id']
         fig_data.append(go.Scatter(x=[square['start'], square['end'], square['end'], square['start']],
                                    y=[ystart] * 2 + [ystart + yh] * 2,
@@ -110,10 +117,10 @@ def broken_bars(data, ystart, yh):
                                    fillcolor=square['color'],
                                    mode='lines',
                                    line_color=square['color'],
-                                   name=square['id'],
-                                   text=square['name'],
-                                   hoverinfo='text + name',
-                                   customdata=[square['id']]),
+                                   name=square['name'],
+                                   text=square['id'],
+                                   hoverinfo='text',
+                                   showlegend=flag),
                         )
     return fig_data, trace_dict
 
@@ -174,7 +181,7 @@ contents = html.Div(children=[
         placeholder='Select a specimen to analyze'
     ),
     html.Br(),
-    dbc.Container(id='parameters', style={'display': 'none'}, children=[
+    dbc.Container(id='parameters', fluid=True, style={'display': 'none'}, children=[
         dbc.Row([
             html.B('Select desired annotations:'),
             html.Br(),
@@ -352,6 +359,7 @@ def initial_results(df_dict, ft, lst, lsbm, et, codes_list, chr_num_state, viz_l
     if viz_level == 'Genome':
 
         colors = ['black', '#AFB0B0', 'red', 'blue', 'purple']
+        labels = ['No data', 'Outside scope', 'Filtered', 'User\'s choice', 'Filtered and user\'s choice']
         fig, ax = plt.subplots(1, 1)
         for i, values in enumerate([full_range(base_df, chromosomes),
                                     known_range(base_df, chromosomes),
@@ -359,25 +367,31 @@ def initial_results(df_dict, ft, lst, lsbm, et, codes_list, chr_num_state, viz_l
                                     known_range(ann_df, chromosomes),
                                     known_range(both_df, chromosomes)]):
             for chr_num in range(len(chromosomes)):
-                ax.broken_barh(values[chr_num], (-1 - chr_num, -0.5), color=colors[i])
+                if len(colors) - i <= len(labels):
+                    label = labels.pop(0)
+                else:
+                    label = ""
+                ax.broken_barh(values[chr_num], (-1 - chr_num, -0.5), color=colors[i], label=label)
         ax.set_yticks(ticks=[-n - 1.25 for n in range(len(chromosomes))],
                       labels=chromosomes)
-        fig.set_figwidth(12)
+        ax.set_xticks(ticks=[], labels=[])
+        ax.legend(loc='lower right', prop={'size': 8})
+        fig.set_figwidth(10)
 
         out_url = fig_to_uri(fig)
         return [dbc.Button('Save image'), html.Br(), html.Br(),
                 html.Img(id='cur_plot', src=out_url, style={'width': '100%'})], {'display': 'none'}, dash.no_update, \
-            {'display': 'none'}, base_df.to_dict('records'), param_df.to_dict('records'), {'display': 'none'},\
-            dash.no_update
+               {'display': 'none'}, base_df.to_dict('records'), param_df.to_dict('records'), {'display': 'none'}, \
+               dash.no_update
 
     elif viz_level == 'Chromosome':
 
-        return html.Div(), {'display': 'block'}, chromosomes, dash.no_update, dash.no_update, dash.no_update,\
+        return html.Div(), {'display': 'block'}, chromosomes, dash.no_update, dash.no_update, dash.no_update, \
                {'display': 'none'}, chr_num_state
 
     elif viz_level == 'Gene':
 
-        return html.Div(), {'display': 'block'}, chromosomes, {'display': 'none'}, dash.no_update, dash.no_update,\
+        return html.Div(), {'display': 'block'}, chromosomes, {'display': 'none'}, dash.no_update, dash.no_update, \
                dash.no_update, chr_num_state
 
 
@@ -388,12 +402,11 @@ def initial_results(df_dict, ft, lst, lsbm, et, codes_list, chr_num_state, viz_l
     State('raw-df', 'memory'),
     State('target-df', 'memory'),
     State('code-selection', 'value'),
-    State('feature-type', 'value'),
     State('viz-level', 'value'),
     Input('chromosome-select', 'value'),
     prevent_initial_call=True
 )
-def chromosome_results(base_dict, param_dict, codes_list, ft, viz_lvl, chr_num):
+def chromosome_results(base_dict, param_dict, codes_list, viz_lvl, chr_num):
     if chr_num and viz_lvl == 'Chromosome':
         if codes_list is None:
             codes_list = []
@@ -403,7 +416,14 @@ def chromosome_results(base_dict, param_dict, codes_list, ft, viz_lvl, chr_num):
         param_df = param_df[param_df['chromosome'] == chr_num]
         data, trace_dict = broken_bars(make_chr_data(base_df, param_df, codes_list), 20, 9)
         fig = go.Figure(data)
-        fig.update_layout(showlegend=False)
+        fig.update_layout(showlegend=True, plot_bgcolor='white', legend=dict(orientation="h",
+                                                                             yanchor="bottom",
+                                                                             y=1.02,
+                                                                             xanchor="right",
+                                                                             x=1)
+                          )
+        fig.update_xaxes({'showticklabels': False})
+        fig.update_yaxes({'showticklabels': False})
         return fig, {'display': 'block'}, trace_dict
     else:
         return dash.no_update, dash.no_update, dash.no_update
@@ -449,7 +469,8 @@ def display_seq(specimen_path, annotation):
                                                                                 'fasta')}
         annotations = pd.read_table(glob(f'{specimen_path}\\*.tsv')[0],
                                     header=None,
-                                    names=['protein_id', 'protein_subid', 'protein_len', 'base', 'code', 'name', 'start',
+                                    names=['protein_id', 'protein_subid', 'protein_len', 'base', 'code', 'name',
+                                           'start',
                                            'end', 'e-value', 'mark',
                                            'date', 'seq', 'decr']
                                     )
@@ -460,7 +481,7 @@ def display_seq(specimen_path, annotation):
         ax, _ = record.plot(figure_width=5)
         out_url = fig_to_uri(ax.figure)
         return [dbc.Button('Save image'), html.Br(),
-                html.Center(html.Img(id='cur_plot', src=out_url, style={'width': '80%'}))]
+                html.Center(html.Img(id='cur_plot', src=out_url, style={'width': '80%'})), html.Br(), html.Br()]
 
 
 def layout():
