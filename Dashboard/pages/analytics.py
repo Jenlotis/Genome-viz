@@ -46,11 +46,10 @@ def known_range(df, chr_array):
 
 
 def make_chr_data(base_df, param_df, codes_list):
-    trace_names = []
     data = [{'start': 0,
              'end': base_df['end'].max(),
              'color': 'black',
-             'id': 'base',
+             'id': ['base', ''],
              'name': 'No data'}]
     ann_df = base_df[base_df['protein_id'].isin(codes_list)]
     both_df = param_df[param_df['protein_id'].isin(codes_list)]
@@ -68,7 +67,7 @@ def make_chr_data(base_df, param_df, codes_list):
         data.append({'start': row['start'],
                      'end': row['end'],
                      'color': '#AFB0B0',
-                     'id': f"{row['protein_id']} ({row['name']})",
+                     'id': [row['protein_id'], row['name']],
                      'name': 'Outside scope'})
     for index, row in pd.merge(param_df,
                                both_df,
@@ -78,7 +77,7 @@ def make_chr_data(base_df, param_df, codes_list):
         data.append({'start': row['start'],
                      'end': row['end'],
                      'color': 'red',
-                     'id': f"{row['protein_id']} ({row['name']})",
+                     'id': [row['protein_id'], row['name']],
                      'name': 'Filtered'})
     for index, row in pd.merge(ann_df,
                                both_df,
@@ -88,13 +87,13 @@ def make_chr_data(base_df, param_df, codes_list):
         data.append({'start': row['start'],
                      'end': row['end'],
                      'color': 'blue',
-                     'id': f"{row['protein_id']} ({row['name']})",
+                     'id': [row['protein_id'], row['name']],
                      'name': 'User\'s choice'})
     for index, row in both_df.iterrows():
         data.append({'start': row['start'],
                      'end': row['end'],
                      'color': 'purple',
-                     'id': f"{row['protein_id']} ({row['name']})",
+                     'id': [row['protein_id'], row['name']],
                      'name': 'Filtered and user\'s choice'})
     return data
 
@@ -109,7 +108,7 @@ def broken_bars(data, ystart, yh):
             trace_names.append(square['name'])
         else:
             flag = False
-        trace_dict[i] = square['id']
+        trace_dict[i] = square['id'][0]
         fig_data.append(go.Scatter(x=[square['start'], square['end'], square['end'], square['start']],
                                    y=[ystart] * 2 + [ystart + yh] * 2,
                                    fill='toself',
@@ -118,7 +117,7 @@ def broken_bars(data, ystart, yh):
                                    mode='lines',
                                    line_color=square['color'],
                                    name=square['name'],
-                                   text=square['id'],
+                                   text=f"{square['id'][0]} ({square['id'][1]})",
                                    hoverinfo='text',
                                    showlegend=flag),
                         )
@@ -464,6 +463,7 @@ def seq_display(viz_lvl, base_dict, chr_num_state, trace_dict, gene_state, chr_n
     prevent_initial_call=True
 )
 def display_seq(specimen_path, annotation):
+    print(annotation)
     if annotation is not None:
         seq_len_dict = {seq_rec.id: len(seq_rec.seq) for seq_rec in SeqIO.parse(glob(f'{specimen_path}\\*.faa')[0],
                                                                                 'fasta')}
