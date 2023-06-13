@@ -245,31 +245,39 @@ contents = html.Div(children=[
         ])
     ]),
     html.Br(),
-    dbc.RadioItems(
-        ['Genome', 'Chromosome', 'Protein'],
-        inline=True,
-        style={'display': 'none'},
-        id='viz-level'
-    ),
-    html.Div([
-        html.B('Select a chromosome:'),
-        html.Br(),
-        dcc.Dropdown(
-            id='chromosome-select'
-        ),
-        html.Br(),
-    ], style={'display': 'none'}, id='chromosome-select-container'),
-    html.Div([
-        html.B('Select a protein:'),
-        html.Br(),
-        dcc.Dropdown(
-            id='gene-select'
-        ),
-    ], style={'display': 'none'}, id='gene-select-container'),
-    html.Br(),
-    html.Div(id='results'),
-    dcc.Graph(id='single-chromosome-graph',
-              style={'display': 'none'})
+    dcc.Tabs([
+        dcc.Tab(children=[
+            html.Br(),
+            dbc.RadioItems(
+                ['Genome', 'Chromosome', 'Protein'],
+                inline=True,
+                style={'display': 'none'},
+                id='viz-level'
+            ),
+            html.Div([
+                html.B('Select a chromosome:'),
+                html.Br(),
+                dcc.Dropdown(
+                    id='chromosome-select'
+                ),
+                html.Br(),
+            ], style={'display': 'none'}, id='chromosome-select-container'),
+            html.Div([
+                html.B('Select a protein:'),
+                html.Br(),
+                dcc.Dropdown(
+                    id='gene-select'
+                ),
+            ], style={'display': 'none'}, id='gene-select-container'),
+            html.Br(),
+            html.Div(id='results'),
+            dcc.Graph(id='single-chromosome-graph',
+                      style={'display': 'none'})
+        ], label='Visualization', value='viz'),
+        dcc.Tab(children=[
+
+        ], label='Statistics', value='stat')
+    ], id='result-tabs', style={'display': 'none'}, value='viz'),
 ])
 
 
@@ -320,13 +328,14 @@ def display_parameters(specimen_path):
 
 
 @callback(
+    Output('result-tabs', 'style'),
     Output('viz-level', 'style'),
     Output('viz-level', 'value'),
     Input('go_button', 'n_clicks'),
     prevent_initial_call=True
 )
 def show_radio(n_clicks):
-    return {'display': 'block'}, 'Genome'
+    return {'display': 'block'}, {'display': 'block'}, 'Genome'
 
 
 @callback(
