@@ -1,7 +1,7 @@
 import dash
 from .utilities import render_layout
 import os
-from dash import html, dcc, callback, Input, Output, State, ctx
+from dash import html, dcc, callback, Input, Output, State, ctx, dash_table
 import pandas as pd
 import numpy as np
 from glob import glob
@@ -92,7 +92,7 @@ def make_chr_data(base_df, param_df, ann_proteins):
     for index, row in both_df.iterrows():
         data.append({'start': row['start'],
                      'end': row['end'],
-                     'color': 'purple',
+                     'color': 'magenta',
                      'id': [row['protein_id'], row['name']],
                      'name': 'Filtered and user\'s choice'})
     return data
@@ -122,6 +122,45 @@ def broken_bars(data, ystart, yh):
                                    showlegend=flag),
                         )
     return fig_data, trace_dict
+
+
+def count_prot(df, annotations, cl):
+    merged = pd.merge(df[['protein_id']],
+                      annotations[['protein_id', 'code', 'name']],
+                      how='left',
+                      on='protein_id')
+    merged = merged[merged['code'].isin(cl)]
+    data = merged.groupby(['code'])[['name']].count().reset_index()
+    non_zero = data['code'].unique()
+    zero = [ann for ann in cl if ann not in non_zero]
+    for ann in zero:
+        data = pd.concat([data, pd.DataFrame([{'code': ann, 'name': 0}])], axis=0, ignore_index=True)
+    return data.sort_values(by=['code']).rename(columns={'code': 'Annotation code', 'name': 'Number of proteins'})
+
+
+def intervs_amyloid(df):
+    chromosomes = df['chromosome'].unique()
+    data = []
+    for chr_num in chromosomes:
+        temp_df = df[df['chromosome'] == chr_num].drop_duplicates(subset=['start', 'end'])
+        start = temp_df['start'].tolist()
+        end = temp_df['end'].tolist()
+        for i in range(len(end) - 1):
+            data.append(abs(start[i + 1] - end[i]))
+    fig = go.Figure(go.Histogram(
+        x=data,
+        nbinsx=100,
+        autobinx=False
+    ))
+    return fig
+
+
+def calc_stats(df_list, codes_list):
+    results = {'amyloid-prot': df_list[1].shape[0], 'ann-prot': count_prot(df_list[0], df_list[2], codes_list),
+               'ann-amyloid': count_prot(df_list[1], df_list[2], codes_list),
+               'percent-amyloid': df_list[1].shape[0] / df_list[0].shape[0] * 100,
+               'intervs': intervs_amyloid(df_list[1])}
+    return results
 
 
 dash.register_page(__name__, path='/analytics')
@@ -168,6 +207,7 @@ contents = html.Div(children=[
                 inline=True
             ),
         ]),
+        html.Br(),
         dbc.Row([
             dbc.Col([
                 html.B('Minimum \'log score\':'),
@@ -238,7 +278,33 @@ contents = html.Div(children=[
                       style={'display': 'none'})
         ], label='Visualization', value='viz'),
         dcc.Tab(children=[
-
+            html.Br(),
+            html.B('Select the scope of statistics:'),
+            html.Br(),
+            dbc.RadioItems(
+                ['Full genome', 'Distinct chromosomes'],
+                id='stats-source-select',
+                inline=True
+            ),
+            html.Br(),
+            html.B('Select chromosome(s) for statistics:'),
+            html.Br(),
+            dcc.Dropdown(
+                id='stats-chromosome-select',
+                disabled=True,
+                multi=True,
+                clearable=True
+            ),
+            html.Br(),
+            dbc.Button(
+                'Calculate statistics',
+                id='gen-stats-button',
+                n_clicks=0,
+                class_name='col-2'
+            ),
+            html.Br(),
+            html.Br(),
+            html.Div(id='stats-results')
         ], label='Statistics', value='stat')
     ], id='result-tabs', style={'display': 'none'}, value='viz'),
 ])
@@ -310,6 +376,7 @@ def show_radio(n_clicks):
     Output('target-df', 'memory', allow_duplicate=True),
     Output('gene-select-container', 'style', allow_duplicate=True),
     Output('chromosome-select', 'value'),
+    Output('stats-chromosome-select', 'options'),
     State('raw-df', 'memory'),
     State('feature-type', 'value'),
     State('ls-threshold', 'value'),
@@ -333,7 +400,7 @@ def initial_results(df_dict, ft, lst, lsbm, et, codes_list, chr_num_state, ann_d
                        & (base_df['log_bias'] + lsbm < base_df['log_score'])
                        & (base_df['complexity'] <= et)]
     ann_df = base_df[base_df['protein_id'].isin(ann_proteins)]
-    both_df = param_df[param_df['protein_id'].isin(codes_list)]
+    both_df = param_df[param_df['protein_id'].isin(ann_proteins)]
     chromosomes = base_df['chromosome'].dropna().unique()
 
     if viz_level == 'Genome':
@@ -362,17 +429,17 @@ def initial_results(df_dict, ft, lst, lsbm, et, codes_list, chr_num_state, ann_d
         return [dbc.Button('Save image'), html.Br(), html.Br(),
                 html.Img(id='cur_plot', src=out_url, style={'width': '100%'})], {'display': 'none'}, dash.no_update, \
                {'display': 'none'}, base_df.to_dict('records'), param_df.to_dict('records'), {'display': 'none'}, \
-               dash.no_update
+               dash.no_update, chromosomes
 
     elif viz_level == 'Chromosome':
 
         return html.Div(), {'display': 'block'}, chromosomes, dash.no_update, dash.no_update, dash.no_update, \
-               {'display': 'none'}, chr_num_state
+               {'display': 'none'}, chr_num_state, dash.no_update
 
     elif viz_level == 'Protein':
 
         return html.Div(), {'display': 'block'}, chromosomes, {'display': 'none'}, dash.no_update, dash.no_update, \
-               dash.no_update, chr_num_state
+               dash.no_update, chr_num_state, dash.no_update
 
 
 @callback(
@@ -465,6 +532,96 @@ def display_seq(specimen_path, annotation):
         out_url = fig_to_uri(ax.figure)
         return [dbc.Button('Save image'), html.Br(),
                 html.Center(html.Img(id='cur_plot', src=out_url, style={'width': '80%'})), html.Br(), html.Br()]
+
+
+@callback(
+    Output('stats-chromosome-select', 'disabled'),
+    Input('stats-source-select', 'value'),
+    prevent_initial_call=True
+)
+def stats_scope(selection):
+    if selection == 'Distinct chromosomes':
+        return False
+    elif selection == 'Full genome':
+        return True
+    else:
+        return dash.no_update
+
+
+@callback(
+    Output('stats-results', 'children'),
+    State('stats-source-select', 'value'),
+    State('stats-chromosome-select', 'value'),
+    State('raw-df', 'memory'),
+    State('target-df', 'memory'),
+    State('annotations', 'memory'),
+    State('code-selection', 'value'),
+    Input('gen-stats-button', 'n_clicks'),
+    prevent_initial_call=True
+)
+def generate_stats(source, chromosomes, base_dict, param_dict, ann_dict, codes_list, n_clicks):
+    if source is None:
+        return dbc.Alert('No data to display. Please select the source!', color='warning')
+    elif source == 'Distinct chromosomes' and chromosomes is None or chromosomes == []:
+        return dbc.Alert('No data to display. Please select at least one chromosome!', color='warning')
+    else:
+        if codes_list is None:
+            codes_list = []
+        base_df = pd.DataFrame(base_dict)
+        param_df = pd.DataFrame(param_dict)
+        annotations = pd.DataFrame(ann_dict)
+        if source == 'Full genome':
+            data = [base_df, param_df, annotations]
+        elif source == 'Distinct chromosomes':
+            data = [base_df[base_df['chromosome'].isin(chromosomes)],
+                    param_df[param_df['chromosome'].isin(chromosomes)],
+                    annotations]
+        else:
+            data = []
+        stats = calc_stats(data, codes_list)
+        return [
+            dbc.Container([
+                dbc.Row([
+                    dbc.Col([
+                        html.Center([
+                            html.B('Total number of proteins with amyloid motifs: '),
+                            f"{stats['amyloid-prot']}"
+                        ])
+                    ]),
+                    dbc.Col([
+                        html.Center([
+                            html.B('Percentage of proteins with amyloid motifs across all encoded proteins: '),
+                            f"{round(stats['percent-amyloid'], 3)}%"
+                        ])
+                    ])
+                ]),
+                html.Br(),
+                dbc.Row([
+                    dbc.Col([
+                        html.B('Total number of proteins per annotation:'),
+                        html.Br(),
+                        dash_table.DataTable(
+                            data=stats['ann-prot'].to_dict('records'),
+                            columns=[{"name": i, "id": i} for i in stats['ann-prot'].columns]
+                        )
+                    ]),
+                    dbc.Col([
+                        html.B('Total number of proteins with amyloid motifs per annotation: '),
+                        html.Br(),
+                        dash_table.DataTable(
+                            data=stats['ann-amyloid'].to_dict('records'),
+                            columns=[{"name": i, "id": i} for i in stats['ann-amyloid'].columns]
+                        )
+                    ])
+                ]),
+                html.Br(),
+                html.B('Distribution of intervals between proteins with amyloid motifs:'),
+                html.Br(),
+                dbc.Row([
+                    dcc.Graph(figure=stats['intervs'])
+                ])
+            ])
+        ]
 
 
 def layout():
