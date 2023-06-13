@@ -124,43 +124,6 @@ def broken_bars(data, ystart, yh):
     return fig_data, trace_dict
 
 
-def plot_seq(seq):
-    fill_colors = {'A': '#5A6CFF', 'B': '#FF5D5D', 'C': '#FFF557', 'D': '#6ECE52'}
-
-    fig = go.Figure(data=go.Scatter())
-
-    for i, letter in enumerate(seq):
-        fig.add_annotation(
-            x=i + 1, y=3,
-            text=f'<b>{letter}</b>',
-            showarrow=False,
-            font=dict(
-                family="Arial",
-                size=16,
-                color='black',
-            ),
-            bordercolor='rgba(0, 0, 0, 0)',
-            borderwidth=2,
-            borderpad=24,
-            bgcolor=fill_colors[letter]
-        )
-
-    fig.update_layout(
-        plot_bgcolor="white",  # Set the background color to white
-        width=800,
-        height=400,
-        xaxis=dict(
-            showgrid=False,  # Hide the x-axis grid
-            showticklabels=False
-        ),
-        yaxis=dict(
-            showgrid=False,  # Hide the y-axis grid
-            showticklabels=False
-        )
-    )
-    return fig
-
-
 dash.register_page(__name__, path='/analytics')
 
 data_path = "D:\Studia\Python_projects\Genome-viz\Data"
