@@ -600,13 +600,13 @@ def generate_stats(source, chromosomes, base_dict, param_dict, ann_dict, codes_l
                 dbc.Row([
                     dbc.Col([
                         html.Center([
-                            html.B('Total number of proteins with amyloid motifs: '),
+                            html.B('Total number of proteins with signalling amyloid motifs: '),
                             f"{stats['amyloid-prot']}"
                         ])
                     ]),
                     dbc.Col([
                         html.Center([
-                            html.B('Percentage of proteins with amyloid motifs across all encoded proteins: '),
+                            html.B('Percentage of proteins with signalling amyloid motifs across all encoded proteins: '),
                             f"{round(stats['percent-amyloid'], 3)}%"
                         ])
                     ])
@@ -622,7 +622,7 @@ def generate_stats(source, chromosomes, base_dict, param_dict, ann_dict, codes_l
                         )
                     ]),
                     dbc.Col([
-                        html.B('Total number of proteins with amyloid motifs per annotation: '),
+                        html.B('Total number of proteins with signalling amyloid motifs per annotation: '),
                         html.Br(),
                         dash_table.DataTable(
                             data=stats['ann-amyloid'].to_dict('records'),
@@ -631,7 +631,7 @@ def generate_stats(source, chromosomes, base_dict, param_dict, ann_dict, codes_l
                     ])
                 ]),
                 html.Br(),
-                html.B('Distribution of intervals between proteins with amyloid motifs:'),
+                html.B('Distribution of intervals between consecutive proteins with signalling amyloid motifs:'),
                 html.Br(),
                 dbc.Row([
                     dcc.Graph(figure=stats['intervs'])
