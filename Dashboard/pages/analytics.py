@@ -12,6 +12,9 @@ import plotly.graph_objects as go
 import dash_bootstrap_components as dbc
 from Bio import SeqIO
 from dna_features_viewer import GraphicFeature, GraphicRecord
+from quantiprot.utils.io import load_fasta_file
+from quantiprot.utils.feature import Feature, FeatureSet
+from quantiprot.metrics.entropy import entropy
 import matplotlib
 
 matplotlib.use('agg')
@@ -161,6 +164,17 @@ def calc_stats(df_list, codes_list):
                'percent-amyloid': df_list[1].shape[0] / df_list[0].shape[0] * 100,
                'intervs': intervs_amyloid(df_list[1])}
     return results
+
+
+def make_complexity_df(sp):
+    seq = load_fasta_file(glob(f'{sp}\\*.faa')[0])
+
+    fs = FeatureSet("")
+    fs.add(Feature(entropy, window=10).then(min))
+
+    ent = [{'protein_id': s.identifier.split(" ", 1)[0], 'complexity': s.data[0]} for s in fs(seq)]
+
+    return pd.DataFrame(ent)
 
 
 dash.register_page(__name__, path='/analytics')
@@ -335,6 +349,8 @@ def display_parameters(specimen_path):
                                     sep='	',
                                     header=None,
                                     names=['protein_id', 'complexity'])
+    # motive_complexity = make_complexity_df(specimen_path)
+
     features['protein_id'] = features.apply(lambda x: x['related_accession'] if x['# feature'] == 'mRNA'
     else (x['product_accession'] if x['# feature'] == 'CDS'
           else np.nan), axis=1)
