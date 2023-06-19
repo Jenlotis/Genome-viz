@@ -345,11 +345,11 @@ def display_parameters(specimen_path):
                                 names=['protein_id', 'protein_subid', 'protein_len', 'base', 'code', 'name', 'start',
                                        'end', 'e-value', 'mark', 'date', 'seq', 'decr']
                                 )
-    motive_complexity = pd.read_csv(glob(f'{specimen_path}\\*.ent')[0],
-                                    sep='	',
-                                    header=None,
-                                    names=['protein_id', 'complexity'])
-    # motive_complexity = make_complexity_df(specimen_path)
+    # motive_complexity = pd.read_csv(glob(f'{specimen_path}\\*.ent')[0],
+    #                                 sep='	',
+    #                                 header=None,
+    #                                 names=['protein_id', 'complexity'])
+    motive_complexity = make_complexity_df(specimen_path)
 
     features['protein_id'] = features.apply(lambda x: x['related_accession'] if x['# feature'] == 'mRNA'
     else (x['product_accession'] if x['# feature'] == 'CDS'
@@ -440,6 +440,7 @@ def initial_results(df_dict, ft, lst, lsbm, et, codes_list, chr_num_state, ann_d
         ax.set_xticks(ticks=[], labels=[])
         ax.legend(loc='lower right', prop={'size': 8})
         fig.set_figwidth(10)
+        fig.tight_layout()
 
         out_url = fig_to_uri(fig)
         return [dbc.Button('Save image'), html.Br(), html.Br(),
@@ -526,22 +527,29 @@ def seq_display(viz_lvl, base_dict, chr_num_state, trace_dict, gene_state, chr_n
 @callback(
     Output('results', 'children', allow_duplicate=True),
     State('specimen-dropdown', 'value'),
+    State('target-df', 'memory'),
+    State('annotations', 'memory'),
     Input('gene-select', 'value'),
     prevent_initial_call=True
 )
-def display_seq(specimen_path, annotation):
+def display_seq(specimen_path, param_dict, ann_dict, annotation):
     if annotation is not None:
         seq_len_dict = {seq_rec.id: len(seq_rec.seq) for seq_rec in SeqIO.parse(glob(f'{specimen_path}\\*.faa')[0],
                                                                                 'fasta')}
-        annotations = pd.read_table(glob(f'{specimen_path}\\*.tsv')[0],
-                                    header=None,
-                                    names=['protein_id', 'protein_subid', 'protein_len', 'base', 'code', 'name',
-                                           'start',
-                                           'end', 'e-value', 'mark',
-                                           'date', 'seq', 'decr']
-                                    )
-        colors = ["#ffd700", "#ffcccc", "#cffccc", "#ccccff", '#D3869A', '#F3B659', '#57E8E4']
-        features = [GraphicFeature(start=row['start'], end=row['end'], label=f"{row['code']} - {row['name']}", color=colors[index]) for
+        param_df = pd.DataFrame(param_dict)
+        annotations = pd.DataFrame(ann_dict)
+        motifs = [{'protein_id': row['protein_id'],
+                   'code': '',
+                   'name': 'Signalling amyloid motif',
+                   'start': row['seq_start'],
+                   'end': row['seq_end']} for index, row in param_df.iterrows()]
+        annotations = pd.concat([annotations, pd.DataFrame(motifs)], axis=0, ignore_index=True)
+        colors = ["#ffd700", "#00ff00", "#0000ff", "#ff0000", "#ff00ff", "#00ffff", "#800000", "#008000", "#000080",
+                  "#808000", "#800080", "#008080", "#808080", "#ffa500", "#a52a2a", "#ffff00", "#ff4500", "#da70d6",
+                  "#dc143c", "#00ced1"
+                  ]
+        features = [GraphicFeature(start=row['start'], end=row['end'], label=f"{row['code']} - {row['name']}",
+                                   color=colors[index]) for
                     index, row in annotations[annotations['protein_id'] == annotation].reset_index().iterrows()]
         record = GraphicRecord(sequence_length=seq_len_dict[annotation], features=features)
         ax, _ = record.plot(figure_width=5)
@@ -606,7 +614,8 @@ def generate_stats(source, chromosomes, base_dict, param_dict, ann_dict, codes_l
                     ]),
                     dbc.Col([
                         html.Center([
-                            html.B('Percentage of proteins with signalling amyloid motifs across all encoded proteins: '),
+                            html.B(
+                                'Percentage of proteins with signalling amyloid motifs across all encoded proteins: '),
                             f"{round(stats['percent-amyloid'], 3)}%"
                         ])
                     ])
