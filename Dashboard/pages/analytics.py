@@ -71,7 +71,7 @@ def make_chr_data(base_df, param_df, ann_proteins):
                      'end': row['end'],
                      'color': '#AFB0B0',
                      'id': [row['protein_id'], row['name']],
-                     'name': 'Outside scope'})
+                     'name': 'Other'})
     for index, row in pd.merge(param_df,
                                both_df,
                                indicator=True,
@@ -81,7 +81,7 @@ def make_chr_data(base_df, param_df, ann_proteins):
                      'end': row['end'],
                      'color': 'red',
                      'id': [row['protein_id'], row['name']],
-                     'name': 'Filtered'})
+                     'name': 'With amyloid signaling motifs'})
     for index, row in pd.merge(ann_df,
                                both_df,
                                indicator=True,
@@ -91,13 +91,13 @@ def make_chr_data(base_df, param_df, ann_proteins):
                      'end': row['end'],
                      'color': 'blue',
                      'id': [row['protein_id'], row['name']],
-                     'name': 'User\'s choice'})
+                     'name': 'With user selected annotations'})
     for index, row in both_df.iterrows():
         data.append({'start': row['start'],
                      'end': row['end'],
                      'color': 'magenta',
                      'id': [row['protein_id'], row['name']],
-                     'name': 'Filtered and user\'s choice'})
+                     'name': 'With amyloid signaling motifs and user selected annotations'})
     return data
 
 
@@ -166,7 +166,7 @@ def calc_stats(df_list, codes_list):
     return results
 
 
-def make_complexity_df(sp):
+def make_complexity(sp):
     seq = load_fasta_file(glob(f'{sp}\\*.faa')[0])
 
     fs = FeatureSet("")
@@ -174,12 +174,12 @@ def make_complexity_df(sp):
 
     ent = [{'protein_id': s.identifier.split(" ", 1)[0], 'complexity': s.data[0]} for s in fs(seq)]
 
-    return pd.DataFrame(ent)
+    pd.DataFrame(ent).to_csv(f'{sp}\\complexity.csv')
 
 
 dash.register_page(__name__, path='/analytics')
 
-data_path = "D:\Studia\Python_projects\Genome-viz\Data"
+data_path = "..\\Data"
 specimen_dirs = [dir_names for (dir_path, dir_names, file_names) in os.walk(data_path) if dir_names]
 # with open("..\\code-store.txt") as f:
 #     codes = f.read().splitlines()
@@ -191,13 +191,13 @@ contents = html.Div(children=[
     dcc.Store(id='trace-dict'),
     dcc.Store(id='annotations'),
     dcc.Dropdown(
-        options=[{'label': f'{specimen}', 'value': f'{data_path}\\{specimen}'} for specimen in specimen_dirs[0]],
+        options=[{'label': f'{specimen}', 'value': f"{data_path}\\{specimen}"} for specimen in specimen_dirs[0]],
         id='specimen-dropdown',
         clearable=False,
         placeholder='Select a specimen to analyze'
     ),
     html.Br(),
-    dbc.Container(id='parameters', fluid=True, style={'display': 'none'}, children=[
+    dbc.Spinner(dbc.Container(id='parameters', fluid=True, style={'display': 'none'}, children=[
         dbc.Row([
             html.B('Select desired annotations:'),
             html.Br(),
@@ -260,7 +260,7 @@ contents = html.Div(children=[
                 class_name='col-2'
             )
         ])
-    ]),
+    ]), color='info'),
     html.Br(),
     dcc.Tabs([
         dcc.Tab(children=[
@@ -336,7 +336,7 @@ def display_parameters(specimen_path):
     features = pd.read_csv(glob(f'{specimen_path}\\*.txt')[0],
                            sep="	",
                            low_memory=False)
-    predictions = pd.read_csv(glob(f'{specimen_path}\\*.csv')[0],
+    predictions = pd.read_csv(glob(f'{specimen_path}\\*model123456.csv')[0],
                               sep="	",
                               header=None,
                               names=['protein_id', 'seq_start', 'seq_end', 'log_score', 'log_bias', 'seq'])
@@ -349,7 +349,11 @@ def display_parameters(specimen_path):
     #                                 sep='	',
     #                                 header=None,
     #                                 names=['protein_id', 'complexity'])
-    motive_complexity = make_complexity_df(specimen_path)
+    if glob(f'{specimen_path}\\complexity.csv'):
+        pass
+    else:
+        make_complexity(specimen_path)
+    motive_complexity = pd.read_csv(glob(f'{specimen_path}/complexity.csv')[0])
 
     features['protein_id'] = features.apply(lambda x: x['related_accession'] if x['# feature'] == 'mRNA'
     else (x['product_accession'] if x['# feature'] == 'CDS'
@@ -422,7 +426,11 @@ def initial_results(df_dict, ft, lst, lsbm, et, codes_list, chr_num_state, ann_d
     if viz_level == 'Genome':
 
         colors = ['black', '#AFB0B0', 'red', 'blue', 'magenta']
-        labels = ['No data', 'Outside scope', 'Filtered', 'User\'s choice', 'Filtered and user\'s choice']
+        labels = ['No data',
+                  'Other',
+                  'With amyloid signaling motifs',
+                  'With user selected annotations',
+                  'With amyloid signaling motifs and user selected annotations']
         fig, ax = plt.subplots(1, 1)
         for i, values in enumerate([full_range(base_df, chromosomes),
                                     known_range(base_df, chromosomes),
