@@ -167,23 +167,20 @@ def calc_stats(df_list, codes_list):
 
 
 def make_complexity(sp):
-    seq = load_fasta_file(glob(f'{sp}\\*.faa')[0])
+    seq = load_fasta_file(glob(f'{sp}/*.faa')[0])
 
     fs = FeatureSet("")
     fs.add(Feature(entropy, window=10).then(min))
 
     ent = [{'protein_id': s.identifier.split(" ", 1)[0], 'complexity': s.data[0]} for s in fs(seq)]
 
-    pd.DataFrame(ent).to_csv(f'{sp}\\complexity.csv')
+    pd.DataFrame(ent).to_csv(f'{sp}/complexity.csv')
 
 
 dash.register_page(__name__, path='/analytics')
 
-data_path = "..\\Data"
+data_path = "./Data"
 specimen_dirs = [dir_names for (dir_path, dir_names, file_names) in os.walk(data_path) if dir_names]
-# with open("..\\code-store.txt") as f:
-#     codes = f.read().splitlines()
-# ft_ref = {'mRNA': 'related_accession', 'CDS': 'product_accession'}
 
 contents = html.Div(children=[
     dcc.Store(id='raw-df'),
@@ -191,7 +188,7 @@ contents = html.Div(children=[
     dcc.Store(id='trace-dict'),
     dcc.Store(id='annotations'),
     dcc.Dropdown(
-        options=[{'label': f'{specimen}', 'value': f"{data_path}\\{specimen}"} for specimen in specimen_dirs[0]],
+        options=[{'label': f'{specimen}'.replace('_', ' '), 'value': f"{data_path}/{specimen}"} for specimen in specimen_dirs[0]],
         id='specimen-dropdown',
         clearable=False,
         placeholder='Select a specimen to analyze'
@@ -333,23 +330,23 @@ contents = html.Div(children=[
     prevent_initial_call=True
 )
 def display_parameters(specimen_path):
-    features = pd.read_csv(glob(f'{specimen_path}\\*.txt')[0],
+    features = pd.read_csv(glob(f'{specimen_path}/*.txt')[0],
                            sep="	",
                            low_memory=False)
-    predictions = pd.read_csv(glob(f'{specimen_path}\\*model123456.csv')[0],
+    predictions = pd.read_csv(glob(f'{specimen_path}/*model123456.csv')[0],
                               sep="	",
                               header=None,
                               names=['protein_id', 'seq_start', 'seq_end', 'log_score', 'log_bias', 'seq'])
-    annotations = pd.read_table(glob(f'{specimen_path}\\*.tsv')[0],
+    annotations = pd.read_table(glob(f'{specimen_path}/*.tsv')[0],
                                 header=None,
                                 names=['protein_id', 'protein_subid', 'protein_len', 'base', 'code', 'name', 'start',
                                        'end', 'e-value', 'mark', 'date', 'seq', 'decr']
                                 )
-    # motive_complexity = pd.read_csv(glob(f'{specimen_path}\\*.ent')[0],
+    # motive_complexity = pd.read_csv(glob(f'{specimen_path}/*.ent')[0],
     #                                 sep='	',
     #                                 header=None,
     #                                 names=['protein_id', 'complexity'])
-    if glob(f'{specimen_path}\\complexity.csv'):
+    if glob(f'{specimen_path}/complexity.csv'):
         pass
     else:
         make_complexity(specimen_path)
@@ -542,7 +539,7 @@ def seq_display(viz_lvl, base_dict, chr_num_state, trace_dict, gene_state, chr_n
 )
 def display_seq(specimen_path, param_dict, ann_dict, annotation):
     if annotation is not None:
-        seq_len_dict = {seq_rec.id: len(seq_rec.seq) for seq_rec in SeqIO.parse(glob(f'{specimen_path}\\*.faa')[0],
+        seq_len_dict = {seq_rec.id: len(seq_rec.seq) for seq_rec in SeqIO.parse(glob(f'{specimen_path}/*.faa')[0],
                                                                                 'fasta')}
         param_df = pd.DataFrame(param_dict)
         annotations = pd.DataFrame(ann_dict)

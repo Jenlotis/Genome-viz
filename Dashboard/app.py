@@ -34,7 +34,7 @@ app.layout = dbc.Container([
         dbc.Col([
             html.Div([
                 html.Center(
-                    html.Img(src=b64_image('../logo1.png'),
+                    html.Img(src=b64_image('./logo1.png'),
                              height=120,
                              width=120)
                 ),
