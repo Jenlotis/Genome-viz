@@ -166,16 +166,16 @@ def calc_stats(df_list, codes_list):
     return results
 
 
-def make_complexity(sp):
+def make_complexity(sp,vista):
     seq = load_fasta_file(glob(f'{sp}/*.faa')[0])
-
+    print("start")
     fs = FeatureSet("")
-    fs.add(Feature(entropy, window=10).then(min))
-
+    fs.add(Feature(entropy, window=int(vista)).then(min))
+    print("ok")
     ent = [{'protein_id': s.identifier.split(" ", 1)[0], 'complexity': s.data[0]} for s in fs(seq)]
 
-    pd.DataFrame(ent).to_csv(f'{sp}/complexity.csv')
-
+    pd.DataFrame(ent).to_csv(f'{sp}/complexity{vista}.csv')
+    print("wyjscie")
 
 dash.register_page(__name__, path='/analytics')
 
@@ -193,6 +193,7 @@ contents = html.Div(children=[
         clearable=False,
         placeholder='Select a specimen to analyze'
     ),
+    
     html.Br(),
     dbc.Spinner(dbc.Container(id='parameters', fluid=True, style={'display': 'none'}, children=[
         dbc.Row([
@@ -239,11 +240,20 @@ contents = html.Div(children=[
                 )
             ]),
             dbc.Col([
-                html.B('Maximum entropy (window size 10):'),
+                html.B(f'Maximum entropy for above specified window size:'),
                 html.Br(),
                 dbc.Input(
                     id='entropy-threshold',
                     value=1.5,
+                    required=True
+                )
+            ]),
+            dbc.Col([
+                html.B('Window size:'),
+                html.Br(),
+                dbc.Input(
+                    id='vista',
+                    value=10,
                     required=True
                 )
             ])
@@ -330,6 +340,7 @@ contents = html.Div(children=[
     prevent_initial_call=True
 )
 def display_parameters(specimen_path):
+    print("olk")
     features = pd.read_csv(glob(f'{specimen_path}/*.txt')[0],
                            sep="	",
                            low_memory=False)
@@ -342,16 +353,6 @@ def display_parameters(specimen_path):
                                 names=['protein_id', 'protein_subid', 'protein_len', 'base', 'code', 'name', 'start',
                                        'end', 'e-value', 'mark', 'date', 'seq', 'decr']
                                 )
-    # motive_complexity = pd.read_csv(glob(f'{specimen_path}/*.ent')[0],
-    #                                 sep='	',
-    #                                 header=None,
-    #                                 names=['protein_id', 'complexity'])
-    if glob(f'{specimen_path}/complexity.csv'):
-        pass
-    else:
-        make_complexity(specimen_path)
-    motive_complexity = pd.read_csv(glob(f'{specimen_path}/complexity.csv')[0])
-
     features['protein_id'] = features.apply(lambda x: x['related_accession'] if x['# feature'] == 'mRNA'
     else (x['product_accession'] if x['# feature'] == 'CDS'
           else np.nan), axis=1)
@@ -365,7 +366,7 @@ def display_parameters(specimen_path):
                                                     'product_length',
                                                     'protein_id']]
     df = pd.merge(df, predictions, how='inner', on='protein_id')
-    df = pd.merge(df, motive_complexity, how='inner', on='protein_id')
+    
     code_options = [{'label': f'{row["base"]} - {row["code"]} ({row["name"]})',
                      'value': row['code']}
                     for index, row in annotations[['base', 'code', 'name']].drop_duplicates().iterrows()]
@@ -394,24 +395,32 @@ def show_radio(n_clicks):
     Output('gene-select-container', 'style', allow_duplicate=True),
     Output('chromosome-select', 'value'),
     Output('stats-chromosome-select', 'options'),
-    State('raw-df', 'memory'),
     State('feature-type', 'value'),
     State('ls-threshold', 'value'),
     State('ls-bias-margin', 'value'),
     State('entropy-threshold', 'value'),
     State('code-selection', 'value'),
-    State('chromosome-select', 'value'),
     State('annotations', 'memory'),
+    State('raw-df', 'memory'),
+    Input('specimen-dropdown', 'value'),
+    State('vista', 'value'),
+    State('chromosome-select', 'value'),    
     Input('viz-level', 'value'),
     prevent_initial_call=True
 )
-def initial_results(df_dict, ft, lst, lsbm, et, codes_list, chr_num_state, ann_dict, viz_level):
+def initial_results(ft, lst, lsbm, et, codes_list, ann_dict, df_dict, specimen_path, vista,  chr_num_state, viz_level):
     lst, lsbm, et = float(lst), float(lsbm), float(et)
     if codes_list is None:
         codes_list = []
     annotations = pd.DataFrame(ann_dict)
     ann_proteins = annotations[annotations['code'].isin(codes_list)]['protein_id'].unique()
+
     df = pd.DataFrame(df_dict)
+    if not glob(f'{specimen_path}/complexity{vista}.csv'):
+        make_complexity(specimen_path, vista)
+    motive_complexity = pd.read_csv(glob(f'{specimen_path}/complexity{vista}.csv')[0])
+    df = pd.merge(df, motive_complexity, how='inner', on='protein_id')
+    
     base_df = df[df['# feature'] == ft]
     param_df = base_df[(base_df['log_score'] >= lst)
                        & (base_df['log_bias'] + lsbm < base_df['log_score'])
@@ -420,6 +429,8 @@ def initial_results(df_dict, ft, lst, lsbm, et, codes_list, chr_num_state, ann_d
     both_df = param_df[param_df['protein_id'].isin(ann_proteins)]
     chromosomes = base_df['chromosome'].dropna().unique()
 
+
+    
     if viz_level == 'Genome':
 
         colors = ['black', '#AFB0B0', 'red', 'blue', 'magenta']
