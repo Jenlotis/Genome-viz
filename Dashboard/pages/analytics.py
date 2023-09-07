@@ -120,8 +120,7 @@ def broken_bars(data, ystart, yh):
                                    mode='lines',
                                    line_color=square['color'],
                                    name=square['name'],
-                                   text=f"{square['id'][0]} ({square['id'][1]})",
-                                   hoverinfo='text',
+                                   text=f"{square['id'][0]} ({square['id'][1]}) jest",
                                    showlegend=flag),
                         )
     return fig_data, trace_dict
@@ -240,7 +239,7 @@ contents = html.Div(children=[
                 )
             ]),
             dbc.Col([
-                html.B(f'Maximum entropy for above specified window size:'),
+                html.B(f'Maximum entropy for above specified window size(if 0 entropy will not be claculated):'),
                 html.Br(),
                 dbc.Input(
                     id='entropy-threshold',
@@ -281,9 +280,7 @@ contents = html.Div(children=[
             html.Div([
                 html.B('Select a chromosome:'),
                 html.Br(),
-                dcc.Dropdown(
-                    id='chromosome-select'
-                ),
+                dcc.Dropdown(id='chromosome-select'),
                 html.Br(),
             ], style={'display': 'none'}, id='chromosome-select-container'),
             html.Div([
@@ -416,21 +413,26 @@ def initial_results(ft, lst, lsbm, et, codes_list, ann_dict, df_dict, specimen_p
     ann_proteins = annotations[annotations['code'].isin(codes_list)]['protein_id'].unique()
 
     df = pd.DataFrame(df_dict)
-    if not glob(f'{specimen_path}/complexity{vista}.csv'):
-        make_complexity(specimen_path, vista)
-    motive_complexity = pd.read_csv(glob(f'{specimen_path}/complexity{vista}.csv')[0])
-    df = pd.merge(df, motive_complexity, how='inner', on='protein_id')
     
-    base_df = df[df['# feature'] == ft]
-    param_df = base_df[(base_df['log_score'] >= lst)
-                       & (base_df['log_bias'] + lsbm < base_df['log_score'])
-                       & (base_df['complexity'] <= et)]
+    if et==0:
+        base_df = df[df['# feature'] == ft]
+        param_df = base_df[(base_df['log_score'] >= lst)
+                         & (base_df['log_bias'] + lsbm < base_df['log_score'])]
+    else:
+        if not glob(f'{specimen_path}/complexity{vista}.csv'):
+            make_complexity(specimen_path, vista)
+        else:
+            motive_complexity = pd.read_csv(glob(f'{specimen_path}/complexity{vista}.csv')[0])
+            df = pd.merge(df, motive_complexity, how='inner', on='protein_id')
+        base_df = df[df['# feature'] == ft]
+        param_df = base_df[(base_df['log_score'] >= lst)
+                         & (base_df['log_bias'] + lsbm < base_df['log_score'])
+                         & (base_df['complexity'] <= et)]
     ann_df = base_df[base_df['protein_id'].isin(ann_proteins)]
     both_df = param_df[param_df['protein_id'].isin(ann_proteins)]
     chromosomes = base_df['chromosome'].dropna().unique()
 
 
-    
     if viz_level == 'Genome':
 
         colors = ['black', '#AFB0B0', 'red', 'blue', 'magenta']
@@ -451,6 +453,7 @@ def initial_results(ft, lst, lsbm, et, codes_list, ann_dict, df_dict, specimen_p
                 else:
                     label = ""
                 ax.broken_barh(values[chr_num], (-1 - chr_num, -0.5), color=colors[i], label=label)
+        ax.tick_params(axis="y", length=0.75)
         ax.set_yticks(ticks=[-n - 1.25 for n in range(len(chromosomes))],
                       labels=chromosomes)
         ax.set_xticks(ticks=[], labels=[])
@@ -499,6 +502,8 @@ def chromosome_results(base_dict, param_dict, codes_list, viz_lvl, ann_dict, chr
         param_df = param_df[param_df['chromosome'] == chr_num]
         data, trace_dict = broken_bars(make_chr_data(base_df, param_df, ann_proteins), 20, 9)
         fig = go.Figure(data)
+        print("#", data)
+        
         fig.update_layout(showlegend=True, plot_bgcolor='white', legend=dict(orientation="h",
                                                                              yanchor="bottom",
                                                                              y=1.02,
