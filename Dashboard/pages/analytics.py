@@ -120,7 +120,8 @@ def broken_bars(data, ystart, yh):
                                    mode='lines',
                                    line_color=square['color'],
                                    name=square['name'],
-                                   text=f"{square['id'][0]} ({square['id'][1]}) jest",
+                                   text=f"{square['id'][0]} ({square['id'][1]})",
+                                   hoverinfo='text',
                                    showlegend=flag),
                         )
     return fig_data, trace_dict
@@ -165,16 +166,16 @@ def calc_stats(df_list, codes_list):
     return results
 
 
-def make_complexity(sp,vista):
+def make_complexity(sp):
     seq = load_fasta_file(glob(f'{sp}/*.faa')[0])
-    print("start")
+
     fs = FeatureSet("")
-    fs.add(Feature(entropy, window=int(vista)).then(min))
-    print("ok")
+    fs.add(Feature(entropy, window=10).then(min))
+
     ent = [{'protein_id': s.identifier.split(" ", 1)[0], 'complexity': s.data[0]} for s in fs(seq)]
 
-    pd.DataFrame(ent).to_csv(f'{sp}/complexity{vista}.csv')
-    print("wyjscie")
+    pd.DataFrame(ent).to_csv(f'{sp}/complexity.csv')
+
 
 dash.register_page(__name__, path='/analytics')
 
@@ -192,7 +193,6 @@ contents = html.Div(children=[
         clearable=False,
         placeholder='Select a specimen to analyze'
     ),
-    
     html.Br(),
     dbc.Spinner(dbc.Container(id='parameters', fluid=True, style={'display': 'none'}, children=[
         dbc.Row([
@@ -239,20 +239,11 @@ contents = html.Div(children=[
                 )
             ]),
             dbc.Col([
-                html.B(f'Maximum entropy for above specified window size(if 0 entropy will not be claculated):'),
+                html.B('Maximum entropy (window size 10):'),
                 html.Br(),
                 dbc.Input(
                     id='entropy-threshold',
-                    value=0,
-                    required=True
-                )
-            ]),
-            dbc.Col([
-                html.B('Window size:'),
-                html.Br(),
-                dbc.Input(
-                    id='vista',
-                    value=10,
+                    value=1.5,
                     required=True
                 )
             ])
@@ -272,7 +263,7 @@ contents = html.Div(children=[
         dcc.Tab(children=[
             html.Br(),
             dbc.RadioItems(
-                ['Genome', 'Chromosome'],
+                ['Genome', 'Chromosome', 'Protein'],
                 inline=True,
                 style={'display': 'none'},
                 id='viz-level'
@@ -280,17 +271,23 @@ contents = html.Div(children=[
             html.Div([
                 html.B('Select a chromosome:'),
                 html.Br(),
-                dcc.Dropdown(id='chromosome-select'),
+                dcc.Dropdown(
+                    id='chromosome-select'
+                ),
                 html.Br(),
-                ], style={'display': 'none'}, id='chromosome-select-container'),
-            html.Br(),
+            ], style={'display': 'none'}, id='chromosome-select-container'),
             html.Div(id='results'),
             dcc.Graph(id='single-chromosome-graph',
                       style={'display': 'none'}),
+            html.Div([
+                html.B('Select a protein:'),
+                html.Br(),
+                dcc.Dropdown(
+                    id='gene-select'
+                ),
+            ], style={'display': 'none'}, id='gene-select-container'),
             html.Br(),
-            html.Div(id='sequence'),
-            
-            ], label='Visualization', value='viz'),
+        ], label='Visualization', value='viz'),
         dcc.Tab(children=[
             html.Br(),
             html.B('Select the scope of statistics:'),
@@ -333,7 +330,6 @@ contents = html.Div(children=[
     prevent_initial_call=True
 )
 def display_parameters(specimen_path):
-    print("olk")
     features = pd.read_csv(glob(f'{specimen_path}/*.txt')[0],
                            sep="	",
                            low_memory=False)
@@ -346,6 +342,12 @@ def display_parameters(specimen_path):
                                 names=['protein_id', 'protein_subid', 'protein_len', 'base', 'code', 'name', 'start',
                                        'end', 'e-value', 'mark', 'date', 'seq', 'decr']
                                 )
+    if glob(f'{specimen_path}/complexity.csv'):
+        pass
+    else:
+        make_complexity(specimen_path)
+    motive_complexity = pd.read_csv(glob(f'{specimen_path}/complexity.csv')[0])
+
     features['protein_id'] = features.apply(lambda x: x['related_accession'] if x['# feature'] == 'mRNA'
     else (x['product_accession'] if x['# feature'] == 'CDS'
           else np.nan), axis=1)
@@ -359,7 +361,7 @@ def display_parameters(specimen_path):
                                                     'product_length',
                                                     'protein_id']]
     df = pd.merge(df, predictions, how='inner', on='protein_id')
-    
+    df = pd.merge(df, motive_complexity, how='inner', on='protein_id')
     code_options = [{'label': f'{row["base"]} - {row["code"]} ({row["name"]})',
                      'value': row['code']}
                     for index, row in annotations[['base', 'code', 'name']].drop_duplicates().iterrows()]
@@ -385,48 +387,34 @@ def show_radio(n_clicks):
     Output('single-chromosome-graph', 'style', allow_duplicate=True),
     Output('raw-df', 'memory'),
     Output('target-df', 'memory', allow_duplicate=True),
+    Output('gene-select-container', 'style', allow_duplicate=True),
     Output('chromosome-select', 'value'),
     Output('stats-chromosome-select', 'options'),
+    State('raw-df', 'memory'),
     State('feature-type', 'value'),
     State('ls-threshold', 'value'),
     State('ls-bias-margin', 'value'),
     State('entropy-threshold', 'value'),
     State('code-selection', 'value'),
+    State('chromosome-select', 'value'),
     State('annotations', 'memory'),
-    State('raw-df', 'memory'),
-    Input('specimen-dropdown', 'value'),
-    State('vista', 'value'),
-    State('chromosome-select', 'value'),    
     Input('viz-level', 'value'),
     prevent_initial_call=True
 )
-def initial_results(ft, lst, lsbm, et, codes_list, ann_dict, df_dict, specimen_path, vista,  chr_num_state, viz_level):
+def initial_results(df_dict, ft, lst, lsbm, et, codes_list, chr_num_state, ann_dict, viz_level):
     lst, lsbm, et = float(lst), float(lsbm), float(et)
     if codes_list is None:
         codes_list = []
     annotations = pd.DataFrame(ann_dict)
     ann_proteins = annotations[annotations['code'].isin(codes_list)]['protein_id'].unique()
-
     df = pd.DataFrame(df_dict)
-    
-    if et==0:
-        base_df = df[df['# feature'] == ft]
-        param_df = base_df[(base_df['log_score'] >= lst)
-                         & (base_df['log_bias'] + lsbm < base_df['log_score'])]
-    else:
-        if not glob(f'{specimen_path}/complexity{vista}.csv'):
-            make_complexity(specimen_path, vista)
-        else:
-            motive_complexity = pd.read_csv(glob(f'{specimen_path}/complexity{vista}.csv')[0])
-            df = pd.merge(df, motive_complexity, how='inner', on='protein_id')
-        base_df = df[df['# feature'] == ft]
-        param_df = base_df[(base_df['log_score'] >= lst)
-                         & (base_df['log_bias'] + lsbm < base_df['log_score'])
-                         & (base_df['complexity'] <= et)]
+    base_df = df[df['# feature'] == ft]
+    param_df = base_df[(base_df['log_score'] >= lst)
+                       & (base_df['log_bias'] + lsbm < base_df['log_score'])
+                       & (base_df['complexity'] <= et)]
     ann_df = base_df[base_df['protein_id'].isin(ann_proteins)]
     both_df = param_df[param_df['protein_id'].isin(ann_proteins)]
     chromosomes = base_df['chromosome'].dropna().unique()
-
 
     if viz_level == 'Genome':
 
@@ -448,7 +436,6 @@ def initial_results(ft, lst, lsbm, et, codes_list, ann_dict, df_dict, specimen_p
                 else:
                     label = ""
                 ax.broken_barh(values[chr_num], (-1 - chr_num, -0.5), color=colors[i], label=label)
-        ax.tick_params(axis="y", length=0.75)
         ax.set_yticks(ticks=[-n - 1.25 for n in range(len(chromosomes))],
                       labels=chromosomes)
         ax.set_xticks(ticks=[], labels=[])
@@ -459,13 +446,18 @@ def initial_results(ft, lst, lsbm, et, codes_list, ann_dict, df_dict, specimen_p
         out_url = fig_to_uri(fig)
         return [dbc.Button('Save image'), html.Br(), html.Br(),
                 html.Img(id='cur_plot', src=out_url, style={'width': '100%'})], {'display': 'none'}, dash.no_update, \
-               {'display': 'none'}, base_df.to_dict('records'), param_df.to_dict('records'), \
+               {'display': 'none'}, base_df.to_dict('records'), param_df.to_dict('records'), {'display': 'none'}, \
                dash.no_update, chromosomes
 
     elif viz_level == 'Chromosome':
 
         return html.Div(), {'display': 'block'}, chromosomes, dash.no_update, dash.no_update, dash.no_update, \
-               chr_num_state, dash.no_update
+               {'display': 'none'}, chr_num_state, dash.no_update
+
+    elif viz_level == 'Protein':
+
+        return html.Div(), {'display': 'block'}, chromosomes, {'display': 'block'}, dash.no_update, dash.no_update, \
+               dash.no_update, chr_num_state, dash.no_update
 
 
 @callback(
@@ -492,7 +484,6 @@ def chromosome_results(base_dict, param_dict, codes_list, viz_lvl, ann_dict, chr
         param_df = param_df[param_df['chromosome'] == chr_num]
         data, trace_dict = broken_bars(make_chr_data(base_df, param_df, ann_proteins), 20, 9)
         fig = go.Figure(data)
-        
         fig.update_layout(showlegend=True, plot_bgcolor='white', legend=dict(orientation="h",
                                                                              yanchor="bottom",
                                                                              y=1.02,
@@ -508,28 +499,31 @@ def chromosome_results(base_dict, param_dict, codes_list, viz_lvl, ann_dict, chr
 
 @callback(
     Output('single-chromosome-graph', 'style', allow_duplicate=True),
+    Output('gene-select-container', 'style', allow_duplicate=True),
     Output('gene-select', 'options'),
     Output('gene-select', 'value'),
-    Output('sequence', 'style', allow_duplicate=True),
+    Output('viz-level', 'value', allow_duplicate=True),
+    State('viz-level', 'value'),
     State('raw-df', 'memory'),
     State('chromosome-select', 'value'),
     State('trace-dict', 'memory'),
+    State('gene-select', 'value'),
+    Input('chromosome-select', 'value'),
     Input('single-chromosome-graph', 'clickData'),
     prevent_initial_call=True
 )
-def seq_display(base_dict, chr_num_state, trace_dict, click_data):
+def seq_display(viz_lvl, base_dict, chr_num_state, trace_dict, gene_state, chr_num, click_data):
     base_df = pd.DataFrame(base_dict)
     if ctx.triggered_id == 'single-chromosome-graph' and click_data['points'][0]['curveNumber'] != 0:
         options = base_df[base_df['chromosome'] == chr_num_state]['protein_id'].unique()
         selected = trace_dict[str(click_data['points'][0]['curveNumber'])]
-        return {'display': 'block'}, options, selected, {'display' ,'block'}
+        return {'display': 'block'}, {'display': 'block'}, options, selected, 'Protein'
     else:
-        return dash.no_update, dash.no_update, dash.no_update, dash.no_update
+        return dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
 
 
 @callback(
     Output('results', 'children', allow_duplicate=True),
-    Output('sequence', 'style', allow_duplicate=True),
     State('specimen-dropdown', 'value'),
     State('target-df', 'memory'),
     State('annotations', 'memory'),
@@ -559,7 +553,7 @@ def display_seq(specimen_path, param_dict, ann_dict, annotation):
         ax, _ = record.plot(figure_width=5)
         out_url = fig_to_uri(ax.figure)
         return [dbc.Button('Save image'), html.Br(),
-                html.Center(html.Img(id='cur_plot', src=out_url, style={'width': '20%'})), html.Br(), html.Br()], {'display' ,'block'}
+                html.Center(html.Img(id='cur_plot', src=out_url, style={'width': '30%'})), html.Br(), html.Br()]
 
 
 @callback(
