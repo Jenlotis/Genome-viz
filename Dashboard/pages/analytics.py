@@ -280,17 +280,25 @@ contents = html.Div(children=[
             html.Div([
                 html.B('Select a chromosome:'),
                 html.Br(),
-                dcc.Dropdown(id='chromosome-select'),
+                dcc.Dropdown(
+                    id='chromosome-select'
+                ),
                 html.Br(),
-                ], style={'display': 'none'}, id='chromosome-select-container'),
-            html.Br(),
-            html.Div(id='results'),
+            ], style={'display': 'none'}, id='chromosome-select-container'),
             dcc.Graph(id='single-chromosome-graph',
                       style={'display': 'none'}),
+            html.Div([
+                html.B('Select a protein:'),
+                html.Br(),
+                dcc.Dropdown(multi=True,
+                    clearable=True,
+                    searchable=True,
+                    id='gene-select'
+                ),
+            ], style={'display': 'none'}, id='gene-select-container'),
+            html.Div(id='results'),
             html.Br(),
-            html.Div(id='sequence'),
-            
-            ], label='Visualization', value='viz'),
+        ], label='Visualization', value='viz'),
         dcc.Tab(children=[
             html.Br(),
             html.B('Select the scope of statistics:'),
@@ -385,22 +393,21 @@ def show_radio(n_clicks):
     Output('single-chromosome-graph', 'style', allow_duplicate=True),
     Output('raw-df', 'memory'),
     Output('target-df', 'memory', allow_duplicate=True),
+    Output('gene-select-container', 'style', allow_duplicate=True),
     Output('chromosome-select', 'value'),
     Output('stats-chromosome-select', 'options'),
+    State('raw-df', 'memory'),
     State('feature-type', 'value'),
     State('ls-threshold', 'value'),
     State('ls-bias-margin', 'value'),
     State('entropy-threshold', 'value'),
     State('code-selection', 'value'),
+    State('chromosome-select', 'value'),
     State('annotations', 'memory'),
-    State('raw-df', 'memory'),
-    Input('specimen-dropdown', 'value'),
-    State('vista', 'value'),
-    State('chromosome-select', 'value'),    
     Input('viz-level', 'value'),
     prevent_initial_call=True
 )
-def initial_results(ft, lst, lsbm, et, codes_list, ann_dict, df_dict, specimen_path, vista,  chr_num_state, viz_level):
+def initial_results(df_dict, ft, lst, lsbm, et, codes_list, chr_num_state, ann_dict, viz_level):
     lst, lsbm, et = float(lst), float(lsbm), float(et)
     if codes_list is None:
         codes_list = []
@@ -459,13 +466,13 @@ def initial_results(ft, lst, lsbm, et, codes_list, ann_dict, df_dict, specimen_p
         out_url = fig_to_uri(fig)
         return [dbc.Button('Save image'), html.Br(), html.Br(),
                 html.Img(id='cur_plot', src=out_url, style={'width': '100%'})], {'display': 'none'}, dash.no_update, \
-               {'display': 'none'}, base_df.to_dict('records'), param_df.to_dict('records'), \
+               {'display': 'none'}, base_df.to_dict('records'), param_df.to_dict('records'), {'display': 'none'}, \
                dash.no_update, chromosomes
 
     elif viz_level == 'Chromosome':
 
         return html.Div(), {'display': 'block'}, chromosomes, dash.no_update, dash.no_update, dash.no_update, \
-               chr_num_state, dash.no_update
+               {'display': 'none'}, chr_num_state, dash.no_update
 
 
 @callback(
@@ -508,9 +515,9 @@ def chromosome_results(base_dict, param_dict, codes_list, viz_lvl, ann_dict, chr
 
 @callback(
     Output('single-chromosome-graph', 'style', allow_duplicate=True),
+    Output('gene-select-container', 'style', allow_duplicate=True),
     Output('gene-select', 'options'),
     Output('gene-select', 'value'),
-    Output('sequence', 'style', allow_duplicate=True),
     State('raw-df', 'memory'),
     State('chromosome-select', 'value'),
     State('trace-dict', 'memory'),
@@ -522,44 +529,55 @@ def seq_display(base_dict, chr_num_state, trace_dict, click_data):
     if ctx.triggered_id == 'single-chromosome-graph' and click_data['points'][0]['curveNumber'] != 0:
         options = base_df[base_df['chromosome'] == chr_num_state]['protein_id'].unique()
         selected = trace_dict[str(click_data['points'][0]['curveNumber'])]
-        return {'display': 'block'}, options, selected, {'display' ,'block'}
+        return {'display': 'block'}, {'display': 'block'}, options, selected
     else:
         return dash.no_update, dash.no_update, dash.no_update, dash.no_update
 
 
 @callback(
     Output('results', 'children', allow_duplicate=True),
-    Output('sequence', 'style', allow_duplicate=True),
     State('specimen-dropdown', 'value'),
     State('target-df', 'memory'),
     State('annotations', 'memory'),
+    State('gene-select', 'value'),
     Input('gene-select', 'value'),
     prevent_initial_call=True
 )
-def display_seq(specimen_path, param_dict, ann_dict, annotation):
+def display_seq(specimen_path, param_dict, ann_dict, annotation, value):
+    #print(annotation, "^^")
+    #print(value, "&")
     if annotation is not None:
-        seq_len_dict = {seq_rec.id: len(seq_rec.seq) for seq_rec in SeqIO.parse(glob(f'{specimen_path}/*.faa')[0],
-                                                                                'fasta')}
-        param_df = pd.DataFrame(param_dict)
-        annotations = pd.DataFrame(ann_dict)
-        motifs = [{'protein_id': row['protein_id'],
-                   'code': '',
-                   'name': 'Signalling amyloid motif',
-                   'start': row['seq_start'],
-                   'end': row['seq_end']} for index, row in param_df.iterrows()]
-        annotations = pd.concat([annotations, pd.DataFrame(motifs)], axis=0, ignore_index=True)
-        colors = ["#ffd700", "#00ff00", "#0000ff", "#ff0000", "#ff00ff", "#00ffff", "#800000", "#008000", "#000080",
-                  "#808000", "#800080", "#008080", "#808080", "#ffa500", "#a52a2a", "#ffff00", "#ff4500", "#da70d6",
-                  "#dc143c", "#00ced1"
-                  ]
-        features = [GraphicFeature(start=row['start'], end=row['end'], label=f"{row['code']} - {row['name']}",
-                                   color=colors[index]) for
-                    index, row in annotations[annotations['protein_id'] == annotation].reset_index().iterrows()]
-        record = GraphicRecord(sequence_length=seq_len_dict[annotation], features=features)
-        ax, _ = record.plot(figure_width=5)
-        out_url = fig_to_uri(ax.figure)
-        return [dbc.Button('Save image'), html.Br(),
-                html.Center(html.Img(id='cur_plot', src=out_url, style={'width': '20%'})), html.Br(), html.Br()], {'display' ,'block'}
+        obrazki=[]
+        if len(annotation[0])==1:
+            annotation=[annotation]
+            
+        for i in annotation:
+            seq_len_dict = {seq_rec.id: len(seq_rec.seq) for seq_rec in SeqIO.parse(glob(f'{specimen_path}/*.faa')[0],
+                                                                                    'fasta')}
+            param_df = pd.DataFrame(param_dict)
+            annotations = pd.DataFrame(ann_dict)
+            motifs = [{'protein_id': row['protein_id'],
+                    'code': '',
+                    'name': 'Signalling amyloid motif',
+                    'start': row['seq_start'],
+                    'end': row['seq_end']} for index, row in param_df.iterrows()]
+            annotations = pd.concat([annotations, pd.DataFrame(motifs)], axis=0, ignore_index=True)
+            colors = ["#ffd700", "#00ff00", "#0000ff", "#ff0000", "#ff00ff", "#00ffff", "#800000", "#008000", "#000080",
+                    "#808000", "#800080", "#008080", "#808080", "#ffa500", "#a52a2a", "#ffff00", "#ff4500", "#da70d6",
+                    "#dc143c", "#00ced1"
+                    ]
+            features = [GraphicFeature(start=row['start'], end=row['end'], label=f"{row['code']} - {row['name']}",
+                                    color=colors[index]) for
+                        index, row in annotations[annotations['protein_id'] == i].reset_index().iterrows()]
+            record = GraphicRecord(sequence_length=seq_len_dict[i], features=features)
+            ax, _ = record.plot(figure_width=12)
+            out_url = fig_to_uri(ax.figure)
+            #print(i,"$")
+            obrazki.append(out_url)
+            #print(obrazki, "*****")
+        print(obrazki, "*****")
+        for i in obrazki:
+            return [html.Center(html.Img(id='cur_plot', src=obrazki, style={'width': '70%'})), html.Br(),dbc.Button('Save image'), html.Br()]
 
 
 @callback(
