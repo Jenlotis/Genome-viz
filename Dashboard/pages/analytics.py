@@ -499,7 +499,6 @@ def chromosome_results(base_dict, param_dict, codes_list, viz_lvl, ann_dict, chr
         ann_proteins = annotations[annotations['code'].isin(codes_list)]['protein_id'].unique()
         base_df = pd.DataFrame(base_dict)
         param_df = pd.DataFrame(param_dict)
-        #print(param_df.iloc[0])
         base_df = base_df[base_df['chromosome'] == chr_num]
         param_df = param_df[param_df['chromosome'] == chr_num]
         data, trace_dict = broken_bars(make_chr_data(base_df, param_df, ann_proteins), 20, 9)
@@ -536,7 +535,7 @@ def seq_display(base_dict, chr_num_state, trace_dict, annotation, click_data):
     if ctx.triggered_id == 'single-chromosome-graph' and click_data['points'][0]['curveNumber'] != 0:
         options = base_df[base_df['chromosome'] == chr_num_state]['protein_id'].unique()
         selected = trace_dict[str(click_data['points'][0]['curveNumber'])]
-        if annotation is not None:
+        if annotation is not None and len(annotation) > 0:
             selected=appending(selected, annotation)
         return {'display': 'block'}, {'display': 'block'}, options, selected, {'display': 'block'}
     else:
@@ -559,31 +558,23 @@ def appending(selected, annotation):
     State('annotations', 'memory'),
     State('gene-select', 'value'),
     State('raw-df', 'memory'),
-    State('sort_switch', 'value'),
+    Input('sort_switch', 'value'),
     Input('gene-select', 'value'),
     prevent_initial_call=True
 )
 def multi_viz(specimen_path, param_dict, ann_dict, annotation, raw_dict, sorter, value):
-    if len(annotation) != 0:    
-        visuals=[]
-        print(len(annotation[0]))
-        if len(annotation[0]) == 1:
-            print(annotation)
-            lista = [annotation]
-            return display_seq(specimen_path, param_dict, ann_dict, lista)
-        if len(annotation) > 1:
-            if not sorter:
-                for seq in lista:
-                    visuals.append(display_seq(specimen_path, param_dict, ann_dict, seq))
-            else:
-                raw_df = pd.DataFrame(raw_dict)
-                lista=raw_df.loc[raw_df['protein_id'].isin(annotation)]            
-                for seq in lista["protein_id"]:
-                    visuals.append(display_seq(specimen_path, param_dict, ann_dict, seq))
-            return visuals
+    if len(annotation) > 0:    
+        visuals=[]  
+        lista = [annotation] if isinstance(annotation, str) else annotation
+        if sorter:
+            raw_df = pd.DataFrame(raw_dict)
+            lista = raw_df.loc[raw_df['protein_id'].isin(lista)]['protein_id']            
+        for seq in lista:
+                visuals.append(display_seq(specimen_path, param_dict, ann_dict, seq))
+        return visuals
 
 
-def display_seq(specimen_path, param_dict, ann_dict, annotation):
+def display_seq(specimen_path, param_dict, ann_dict, seq):
     seq_len_dict = {seq_rec.id: len(seq_rec.seq) for seq_rec in SeqIO.parse(glob(f'{specimen_path}/*.faa')[0],
                                                                             'fasta')}
     param_df = pd.DataFrame(param_dict)
@@ -593,7 +584,6 @@ def display_seq(specimen_path, param_dict, ann_dict, annotation):
                'name': 'Signalling amyloid motif',
                'start': row['seq_start'],
                'end': row['seq_end']} for index, row in param_df.iterrows()]
-    #print(motifs)
     annotations = pd.concat([annotations, pd.DataFrame(motifs)], axis=0, ignore_index=True)
     colors = ["#ffd700", "#00ff00", "#0000ff", "#ff0000", "#ff00ff", "#00ffff", "#800000", "#008000", "#000080",
               "#808000", "#800080", "#008080", "#808080", "#ffa500", "#a52a2a", "#ffff00", "#ff4500", "#da70d6",
@@ -601,8 +591,8 @@ def display_seq(specimen_path, param_dict, ann_dict, annotation):
               ]
     features = [GraphicFeature(start=row['start'], end=row['end'], label=f"{row['code']} - {row['name']}",
                                 color=colors[index]) for
-                index, row in annotations[annotations['protein_id'] == annotation].reset_index().iterrows()]
-    record = GraphicRecord(sequence_length=seq_len_dict[annotation], features=features)
+                index, row in annotations[annotations['protein_id'] == seq].reset_index().iterrows()]
+    record = GraphicRecord(sequence_length=seq_len_dict[seq], features=features)
     ax, _ = record.plot(figure_width=12)
     out_url = fig_to_uri(ax.figure)
     return html.Div([html.Center(html.Img(id='cur_plot', src=out_url, style={'width': '70%'})), html.Br(), dbc.Button('Save image'), html.Br()])
