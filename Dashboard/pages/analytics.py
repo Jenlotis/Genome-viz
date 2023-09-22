@@ -526,7 +526,6 @@ def chromosome_results(base_dict, param_dict, codes_list, viz_lvl, ann_dict, chr
     if chr_num and viz_lvl == 'Chromosome':
         if codes_list is None:
             codes_list = []
-        # clean = [] if ctx.triggered_id=='chromosome-select' else light
 
         annotations = pd.DataFrame(ann_dict)
         ann_proteins = annotations[annotations['code'].isin(codes_list)]['protein_id'].unique()
@@ -684,12 +683,13 @@ def multi_viz(specimen_path, param_dict, ann_dict, annotation, raw_dict, chromos
                 for align in aligns:
                     if align.score >= int(treshold):
                         a.append([row['protein_id'],align,align.score])
-            print(len(found))
             for f in found:
                 b=[]
                 for j in a:
                     if j[0]==f:
                         b.append(j[1:])
+                for i in b:
+                    print(str(i[0]))
 
                 align_vis.append(html.Details([html.Summary(f), html.Div([display_seq(specimen_path, param_dict, ann_dict, f, 0.9, ticks, alignments), str(b[0][0]), html.Br(), b[0][1]])]))    
                     
@@ -718,28 +718,29 @@ def display_seq(specimen_path, param_dict, ann_dict, seq, scaler, ticks, name):
     colors = ["#ffd700", "#00ff00", "#0000ff", "#ff0000", "#ff00ff", "#00ffff", "#800000", "#008000", "#000080",
               "#808000", "#800080", "#008080", "#808080", "#ffa500", "#a52a2a", "#ffff00", "#ff4500", "#da70d6",
               "#dc143c", "#00ced1"
-              ]
+              ]#zolty, jaskrawa zielen, mocny niebieski, czerwony, rozowy, cyjan, bordowy, zielony, ciemny niebieski,
+               #brudny zolty, fiolet, ciemny cyjan, szary, blady pomarancz, brudna czewien(taka cegla), jasny zolty, pomarancz, lilia
+               #rozowa czerwien, inny cyjan
     features = [GraphicFeature(start=row['start'], end=row['end'], label=f"{row['code']} - {row['name']}",
                                 color=colors[index]) for
                 index, row in annotations[annotations['protein_id'] == seq].reset_index().iterrows()]
-
+    
+    motif_features=[]
     for amyloid in motifs:
-        if amyloid['protein_id']==seq:
-            label=f"{amyloid['code']} - {amyloid['name']}"
-            motif_features=GraphicFeature(start=amyloid['start'], end=amyloid['end'], label=f"{amyloid['code']} - {amyloid['name']}",
-                                          color=colors[len(features)-1])
-            break
-    features.append(motif_features)
-
-    record = GraphicRecord(sequence_length=seq_len_dict[seq], features=features,
-                           ticks_resolution=ticks)
-    # record._format_label(label=label, max_label_length=200, max_line_length=100)
-   
-    szer=float((16*scaler)+1)
-    ax, _ = record.plot(figure_width=szer)
+        if amyloid['protein_id'] == seq:
+            label = GraphicRecord._format_label(None, label=f"{amyloid['code']} - {amyloid['name']}", max_label_length=200, max_line_length=100)
+            motif_features = [GraphicFeature(start=amyloid['start'], end=amyloid['end'], label=label, color="#964201")]
+    
+    record = GraphicRecord(sequence_length=seq_len_dict[seq], features=features, ticks_resolution=ticks)
+    record_amyloid = GraphicRecord(sequence_length=seq_len_dict[seq], features=motif_features, ticks_resolution=ticks)
+    
+    szer = float((16*scaler)+1)
+    ax, _ = record.plot(figure_width=szer, level_offset=1)
+    ax, _ = record_amyloid.plot(ax=ax, figure_width=szer, max_label_length=67, max_line_length=30)
     plt.tight_layout()
-    out_url = fig_to_uri(ax.figure)
-    w_size=float((95*scaler)+5)
+    ploting = ax.figure
+    out_url = fig_to_uri(ploting)
+    w_size = float((95*scaler)+ 5)
     if name:
         return html.Div([html.Img(title=seq, id='cur_plot', src=out_url, style={'width': f'{w_size}%'}), html.Br(), html.Br()])
     else:    
