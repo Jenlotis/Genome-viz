@@ -12,12 +12,16 @@ import base64
 import plotly.graph_objects as go
 import dash_bootstrap_components as dbc
 from Bio import SeqIO
+from Bio import Align
+from Bio.Align import substitution_matrices
 from dna_features_viewer import GraphicFeature, GraphicRecord
 from quantiprot.utils.io import load_fasta_file
 from quantiprot.utils.feature import Feature, FeatureSet
 from quantiprot.metrics.entropy import entropy
 import matplotlib
 import sklearn.preprocessing as pre
+import html as internet
+from html.parser import HTMLParser
 
 matplotlib.use('agg')
 
@@ -50,7 +54,7 @@ def known_range(df, chr_array):
     return output
 
 
-def make_chr_data(base_df, param_df, ann_proteins, light):
+def make_chr_data(base_df, param_df, ann_proteins):
     data = [{'start': 0,
              'end': base_df['end'].max(),
              'color': 'black',
@@ -58,19 +62,6 @@ def make_chr_data(base_df, param_df, ann_proteins, light):
              'name': 'No data'}]
     ann_df = base_df[base_df['protein_id'].isin(ann_proteins)]
     both_df = param_df[param_df['protein_id'].isin(ann_proteins)]
-    if light is not None and len(light)>0:
-        light = [light] if isinstance(light, str) else light
-        ann_df = ann_df[~ann_df['protein_id'].isin(light)]
-        both_df = both_df[~both_df['protein_id'].isin(light)]
-        light_df = base_df[base_df['protein_id'].isin(light)]
-        base_df = base_df[~base_df['protein_id'].isin(light)]
-        param_df = param_df[~param_df['protein_id'].isin(light)]
-        for index, row in light_df.iterrows():
-            data.append({'start': row['start'],
-                         'end': row['end'],
-                         'color': '#26E70E',
-                         'id': [row['protein_id'], row['name']],
-                         'name': 'Selected'})
     grey_df = pd.merge(base_df,
                        param_df,
                        indicator=True,
@@ -250,20 +241,20 @@ contents = html.Div(children=[
                 )
             ]),
             dbc.Col([
-                html.B(f'Maximum entropy for above specified window size(if 0 entropy will not be claculated):'),
-                html.Br(),
-                dbc.Input(
-                    id='entropy-threshold',
-                    value=0,
-                    required=True
-                )
-            ]),
-            dbc.Col([
                 html.B('Window size:'),
                 html.Br(),
                 dbc.Input(
                     id='vista',
                     value=10,
+                    required=True
+                )
+            ]),
+            dbc.Col([
+                html.B('Maximum entropy for above specified window size(if 0 entropy will not be claculated):'),
+                html.Br(),
+                dbc.Input(
+                    id='entropy-threshold',
+                    value=0,
                     required=True
                 )
             ])
@@ -302,16 +293,39 @@ contents = html.Div(children=[
                 html.B('Select a protein:'),
                 html.Br(),
                 dcc.Dropdown(multi=True,
-                    clearable=True,
-                    searchable=True,
-                    id='gene-select'
+                             clearable=True,
+                             searchable=True,
+                             id='gene-select'
+                ),                
+                dcc.Dropdown(multi=True,
+                             id='Aligment',
+                             style={'display':'none'}
                 ),
                 dbc.Row([
-                    dbc.Col(daq.ToggleSwitch(label="Sort", labelPosition="top", id='sort_switch', style={'display': 'none'}, value=False, disabled=False)),
-                    dbc.Col(daq.ToggleSwitch(label="Scale", labelPosition="top", id='scale_switch', style={'display': 'none'}, value=False, disabled=False)),
-                ])
+                    dbc.Col(daq.BooleanSwitch(label="Alignment", labelPosition="top", id='aligment_switch', style={'display': 'none'}, on=False, disabled=False, color='#68CDA3')),
+                    dbc.Col(daq.BooleanSwitch(label="Sort", labelPosition="top", id='sort_switch', style={'display': 'none'}, on=False, disabled=True, color='#68CDA3')),
+                    dbc.Col(daq.BooleanSwitch(label="Scale", labelPosition="top", id='scale_switch', style={'display': 'none'}, on=False, disabled=True, color='#68CDA3'))
+                ]),
+                
+                html.Br(),
+                html.Div([
+                    dbc.Row([
+                        dbc.Col([
+                            html.B('Score treshold:'),
+                            dbc.Input(
+                                id='score-threshold',
+                                value=0,
+                                required=True,
+                                style={'width':125}                        
+                            )
+                        ]) 
+                    ])
+                ], style={'display': 'none'}, id='score-threshold-container'),
+               html.Br(),
+               
             ], style={'display': 'none'}, id='gene-select-container'),
             html.Div(id='results'),
+            html.Div(id='align-res'),
             html.Br(),
         ], label='Visualization', value='viz'),
         dcc.Tab(children=[
@@ -410,6 +424,7 @@ def show_radio(n_clicks):
     Output('gene-select-container', 'style', allow_duplicate=True),
     Output('chromosome-select', 'value'),
     Output('stats-chromosome-select', 'options'),
+    Output('gene-select', 'value'),
     State('raw-df', 'memory'),
     State('feature-type', 'value'),
     State('ls-threshold', 'value'),
@@ -439,7 +454,8 @@ def initial_results(df_dict, ft, lst, lsbm, et, codes_list, chr_num_state, ann_d
     else:
         if not glob(f'{specimen_path}/complexity{vista}.csv'):
             make_complexity(specimen_path, vista)
-        else:
+        
+        if 'complexity' not in df:
             motive_complexity = pd.read_csv(glob(f'{specimen_path}/complexity{vista}.csv')[0])
             df = pd.merge(df, motive_complexity, how='inner', on='protein_id')
         base_df = df[df['# feature'] == ft]
@@ -449,7 +465,6 @@ def initial_results(df_dict, ft, lst, lsbm, et, codes_list, chr_num_state, ann_d
     ann_df = base_df[base_df['protein_id'].isin(ann_proteins)]
     both_df = param_df[param_df['protein_id'].isin(ann_proteins)]
     chromosomes = base_df['chromosome'].dropna().unique()
-
 
     if viz_level == 'Genome':
 
@@ -483,18 +498,20 @@ def initial_results(df_dict, ft, lst, lsbm, et, codes_list, chr_num_state, ann_d
         return [dbc.Button('Save image'), html.Br(), html.Br(),
                 html.Img(id='cur_plot', src=out_url, style={'width': '100%'})], {'display': 'none'}, dash.no_update, \
                {'display': 'none'}, base_df.to_dict('records'), param_df.to_dict('records'), {'display': 'none'}, \
-               dash.no_update, chromosomes
+               dash.no_update, chromosomes, dash.no_update
 
     elif viz_level == 'Chromosome':
 
         return html.Div(), {'display': 'block'}, chromosomes, dash.no_update, dash.no_update, dash.no_update, \
-               {'display': 'none'}, chr_num_state, dash.no_update
+               {'display': 'none'}, chr_num_state, dash.no_update, []
 
 
 @callback(
     Output('single-chromosome-graph', 'figure'),
     Output('single-chromosome-graph', 'style', allow_duplicate=True),
     Output('trace-dict', 'memory'),
+    Output('gene-select-container', 'style', allow_duplicate=True),
+    #Output('gene-select', 'value'),
     State('raw-df', 'memory'),
     State('target-df', 'memory'),
     State('code-selection', 'value'),
@@ -502,20 +519,53 @@ def initial_results(df_dict, ft, lst, lsbm, et, codes_list, chr_num_state, ann_d
     State('annotations', 'memory'),
     Input('chromosome-select', 'value'),
     Input('gene-select', 'value'),
+    Input('Aligment', 'value'),
     prevent_initial_call=True
 )
-def chromosome_results(base_dict, param_dict, codes_list, viz_lvl, ann_dict, chr_num, light):
+def chromosome_results(base_dict, param_dict, codes_list, viz_lvl, ann_dict, chr_num, light, aligment):
     if chr_num and viz_lvl == 'Chromosome':
         if codes_list is None:
             codes_list = []
+        # clean = [] if ctx.triggered_id=='chromosome-select' else light
+
         annotations = pd.DataFrame(ann_dict)
         ann_proteins = annotations[annotations['code'].isin(codes_list)]['protein_id'].unique()
         base_df = pd.DataFrame(base_dict)
         param_df = pd.DataFrame(param_dict)
         base_df = base_df[base_df['chromosome'] == chr_num]
         param_df = param_df[param_df['chromosome'] == chr_num]
-        data, trace_dict = broken_bars(make_chr_data(base_df, param_df, ann_proteins, light), 0, 2)
+        data, trace_dict = broken_bars(make_chr_data(base_df, param_df, ann_proteins),  0, 4)
         fig = go.Figure(data)
+        
+        if light is not None:
+            light = [light] if isinstance(light, str) else light
+            lights=base_df.loc[base_df['protein_id'].isin(light)]
+            for index, row in lights.iterrows():
+                fig.add_annotation(x=((row['end']-row["start"])/2)+row["start"],
+                                   y=4,
+                                   showarrow=True,
+                                   arrowhead=2,
+                                   arrowsize=2,
+                                   arrowwidth=1,
+                                   arrowcolor="#26E70E",
+                                   ax=0,
+                                   hoverlabel_bgcolor="#26E70E",
+                                   hovertext=row["protein_id"])
+        if aligment is not None:
+            aligments=base_df.loc[base_df['protein_id'].isin(aligment)]
+            for index, row in aligments.iterrows():
+                fig.add_annotation(x=((row['end']-row["start"])/2)+row["start"],
+                                   y=0,
+                                   showarrow=True,
+                                   arrowhead=3,
+                                   arrowsize=2,
+                                   arrowwidth=1,
+                                   arrowcolor="#e67300",
+                                   ax=0,
+                                   ay=25,
+                                   hoverlabel_bgcolor="#e67300",
+                                   hovertext=row["protein_id"])
+            
         fig.update_layout(showlegend=True, plot_bgcolor='white',
                           legend=dict(orientation="h",
                                       yanchor="bottom",
@@ -524,22 +574,24 @@ def chromosome_results(base_dict, param_dict, codes_list, viz_lvl, ann_dict, chr
                                       x=0,
                                       itemclick=False,
                                       itemdoubleclick=False),
-                          margin=dict(t = 5, b = 0, l = 5, r = 5)
+                          margin=dict(t = 2, b = 1, l = 3, r = 3),
+                          height=250
                           )
         fig.update_xaxes({'showticklabels': False})
         fig.update_yaxes({'showticklabels': False})
-        return fig, {'display': 'block'}, trace_dict
+        return fig, {'display': 'block'}, trace_dict, {'display': 'block'}#, clean
     else:
-        return dash.no_update, dash.no_update, dash.no_update
+        return dash.no_update, dash.no_update, dash.no_update, dash.no_update#, dash.no_update
 
 
 @callback(
     Output('single-chromosome-graph', 'style', allow_duplicate=True),
-    Output('gene-select-container', 'style', allow_duplicate=True),
     Output('gene-select', 'options'),
     Output('gene-select', 'value', allow_duplicate=True),
     Output('sort_switch', 'style'),
     Output('scale_switch', 'style'),
+    Output('aligment_switch', 'style'),
+    Output('score-threshold-container', 'style'),
     State('raw-df', 'memory'),
     State('chromosome-select', 'value'),
     State('trace-dict', 'memory'),
@@ -554,9 +606,9 @@ def seq_display(base_dict, chr_num_state, trace_dict, annotation, click_data):
         selected = trace_dict[str(click_data['points'][0]['curveNumber'])]
         if annotation is not None and len(annotation) > 0:
             selected=appending(selected, annotation)
-        return {'display': 'block'}, {'display': 'block'}, options, selected, {'display': 'block'}, {'display': 'block'}
+        return {'display': 'block'}, options, selected, {'display': 'block'}, {'display': 'block'}, {'display': 'block'}, {'display': 'block'}
     else:
-        return dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
+        return dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
 
 def appending(selected, annotation):
     annotation=[annotation] if len(annotation[0]) == 1 else annotation
@@ -571,19 +623,30 @@ def appending(selected, annotation):
 
 @callback(
     Output('results', 'children', allow_duplicate=True),
+    Output('Aligment', 'value'),
+    Output('sort_switch', 'disabled'),
+    Output('scale_switch', 'disabled'),
+    Output('aligment_switch', 'disabled'),
+    Output('align-res', 'children'),
     State('specimen-dropdown', 'value'),
     State('target-df', 'memory'),
     State('annotations', 'memory'),
     State('gene-select', 'value'),
     State('raw-df', 'memory'),
-    Input('sort_switch', 'value'),
-    Input('scale_switch', 'value'),
+    State('chromosome-select', 'value'),
+    Input('sort_switch', 'on'),
+    Input('scale_switch', 'on'),
+    Input('aligment_switch', 'on'),
     Input('gene-select', 'value'),
+    Input('score-threshold', 'value'),
     prevent_initial_call=True
 )
-def multi_viz(specimen_path, param_dict, ann_dict, annotation, raw_dict, sorter, scaler, value):
-    if len(annotation) > 0:    
-        visuals=[]  
+def multi_viz(specimen_path, param_dict, ann_dict, annotation, raw_dict, chromosome, sorter, scaler, alignments, value, treshold):
+    visuals=[]
+    found=[]
+    a=[]
+    align_vis=[]
+    if len(annotation) > 0:
         scale_list=[]
         lista = [annotation] if isinstance(annotation, str) else annotation
         if sorter:
@@ -596,28 +659,62 @@ def multi_viz(specimen_path, param_dict, ann_dict, annotation, raw_dict, sorter,
             for i in lista:
                 scale_list.append(raw_df.loc[raw_df['protein_id']==i]["product_length"].values)
             maxi=max(scale_list)
+            ticks=round(float(maxi)/1000)*100
             temp=[]
             for i in scale_list:
                 temp.append(i/maxi)
             scale_list=temp
         else:
             scale_list=[1]*len(lista)
+            ticks=100
+            
+        if alignments and len(lista)==1:
+            param_df=pd.DataFrame(param_dict)
+            param_df=param_df.loc[param_df['chromosome']== chromosome]
+            chosen=param_df.loc[param_df['protein_id'].isin(lista)]['seq'].values[0]
+            for index, row in param_df.iterrows():
+                aligner=Align.PairwiseAligner(mode="global", open_gap_score=-10, extend_gap_score=-0.5)
+                aligner.substitution_matrix = substitution_matrices.load("BLOSUM62")
+                aligns=aligner.align(chosen,row["seq"])                
+                for align in aligns:
+                    if align.score >= int(treshold):
+                        found.append(row["protein_id"])
+                    break
+                
+                for align in aligns:
+                    if align.score >= int(treshold):
+                        a.append([row['protein_id'],align,align.score])
+            print(len(found))
+            for f in found:
+                b=[]
+                for j in a:
+                    if j[0]==f:
+                        b.append(j[1:])
+
+                align_vis.append(html.Details([html.Summary(f), html.Div([display_seq(specimen_path, param_dict, ann_dict, f, 0.9, ticks, alignments), str(b[0][0]), html.Br(), b[0][1]])]))    
+                    
+            found.remove(lista[0])   
+            
         for seq,scalers in zip(lista, scale_list):
-                visuals.append(display_seq(specimen_path, param_dict, ann_dict, seq, scalers))
-        return visuals
+                visuals.append(display_seq(specimen_path, param_dict, ann_dict, seq, scalers, ticks, False))
+        if len(lista)>1:
+            return visuals, found, False, False, True, []
+        else:
+            return visuals, found, True, True, False, align_vis
+    return visuals, found, dash.no_update, dash.no_update, dash.no_update, dash.no_update
 
 
-def display_seq(specimen_path, param_dict, ann_dict, seq, scaler):
+def display_seq(specimen_path, param_dict, ann_dict, seq, scaler, ticks, name):
     seq_len_dict = {seq_rec.id: len(seq_rec.seq) for seq_rec in SeqIO.parse(glob(f'{specimen_path}/*.faa')[0],
                                                                             'fasta')}
     param_df = pd.DataFrame(param_dict)
     annotations = pd.DataFrame(ann_dict)
     motifs = [{'protein_id': row['protein_id'],
-               'code': '',
-               'name': 'Signalling amyloid motif',
+               'code': row['seq'],
+               'name': "amyloid signalig motif",
                'start': row['seq_start'],
                'end': row['seq_end']} for index, row in param_df.iterrows()]
-    annotations = pd.concat([annotations, pd.DataFrame(motifs)], axis=0, ignore_index=True)
+
     colors = ["#ffd700", "#00ff00", "#0000ff", "#ff0000", "#ff00ff", "#00ffff", "#800000", "#008000", "#000080",
               "#808000", "#800080", "#008080", "#808080", "#ffa500", "#a52a2a", "#ffff00", "#ff4500", "#da70d6",
               "#dc143c", "#00ced1"
@@ -625,11 +722,28 @@ def display_seq(specimen_path, param_dict, ann_dict, seq, scaler):
     features = [GraphicFeature(start=row['start'], end=row['end'], label=f"{row['code']} - {row['name']}",
                                 color=colors[index]) for
                 index, row in annotations[annotations['protein_id'] == seq].reset_index().iterrows()]
-    record = GraphicRecord(sequence_length=seq_len_dict[seq], features=features)
-    ax, _ = record.plot(figure_width=12)
+
+    for amyloid in motifs:
+        if amyloid['protein_id']==seq:
+            label=f"{amyloid['code']} - {amyloid['name']}"
+            motif_features=GraphicFeature(start=amyloid['start'], end=amyloid['end'], label=f"{amyloid['code']} - {amyloid['name']}",
+                                          color=colors[len(features)-1])
+            break
+    features.append(motif_features)
+
+    record = GraphicRecord(sequence_length=seq_len_dict[seq], features=features,
+                           ticks_resolution=ticks)
+    # record._format_label(label=label, max_label_length=200, max_line_length=100)
+   
+    szer=float((16*scaler)+1)
+    ax, _ = record.plot(figure_width=szer)
+    plt.tight_layout()
     out_url = fig_to_uri(ax.figure)
-    w_size=float(70*scaler)
-    return html.Div([html.Center(html.Img(id='cur_plot', src=out_url, style={'width': f'{w_size}%'})), html.Br(), dbc.Button('Save image'), html.Br(), html.Br()])
+    w_size=float((95*scaler)+5)
+    if name:
+        return html.Div([html.Img(title=seq, id='cur_plot', src=out_url, style={'width': f'{w_size}%'}), html.Br(), html.Br()])
+    else:    
+        return html.Div([seq, html.Br(), html.Img(title=seq, id='cur_plot', src=out_url, style={'width': f'{w_size}%'}), html.Br(), html.Br()])
 
 
 @callback(
