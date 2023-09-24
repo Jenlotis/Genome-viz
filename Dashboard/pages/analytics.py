@@ -194,7 +194,7 @@ contents = html.Div(children=[
         clearable=False,
         placeholder='Select a specimen to analyze'
     ),
-    
+
     html.Br(),
     dbc.Spinner(dbc.Container(id='parameters', fluid=True, style={'display': 'none'}, children=[
         dbc.Row([
@@ -296,7 +296,7 @@ contents = html.Div(children=[
                              clearable=True,
                              searchable=True,
                              id='gene-select'
-                ),                
+                ),
                 dcc.Dropdown(multi=True,
                              id='Aligment',
                              style={'display':'none'}
@@ -306,7 +306,7 @@ contents = html.Div(children=[
                     dbc.Col(daq.BooleanSwitch(label="Sort", labelPosition="top", id='sort_switch', style={'display': 'none'}, on=False, disabled=True, color='#68CDA3')),
                     dbc.Col(daq.BooleanSwitch(label="Scale", labelPosition="top", id='scale_switch', style={'display': 'none'}, on=False, disabled=True, color='#68CDA3'))
                 ]),
-                
+
                 html.Br(),
                 html.Div([
                     dbc.Row([
@@ -316,13 +316,13 @@ contents = html.Div(children=[
                                 id='score-threshold',
                                 value=0,
                                 required=True,
-                                style={'width':125}                        
+                                style={'width':125}
                             )
-                        ]) 
+                        ])
                     ])
                 ], style={'display': 'none'}, id='score-threshold-container'),
                html.Br(),
-               
+
             ], style={'display': 'none'}, id='gene-select-container'),
             html.Div(id='results'),
             html.Div(id='align-res'),
@@ -395,7 +395,7 @@ def display_parameters(specimen_path):
                                                     'product_length',
                                                     'protein_id']]
     df = pd.merge(df, predictions, how='inner', on='protein_id')
-    
+
     code_options = [{'label': f'{row["base"]} - {row["code"]} ({row["name"]})',
                      'value': row['code']}
                     for index, row in annotations[['base', 'code', 'name']].drop_duplicates().iterrows()]
@@ -446,7 +446,7 @@ def initial_results(df_dict, ft, lst, lsbm, et, codes_list, chr_num_state, ann_d
     ann_proteins = annotations[annotations['code'].isin(codes_list)]['protein_id'].unique()
 
     df = pd.DataFrame(df_dict)
-    
+
     if et==0:
         base_df = df[df['# feature'] == ft]
         param_df = base_df[(base_df['log_score'] >= lst)
@@ -454,7 +454,7 @@ def initial_results(df_dict, ft, lst, lsbm, et, codes_list, chr_num_state, ann_d
     else:
         if not glob(f'{specimen_path}/complexity{vista}.csv'):
             make_complexity(specimen_path, vista)
-        
+
         if 'complexity' not in df:
             motive_complexity = pd.read_csv(glob(f'{specimen_path}/complexity{vista}.csv')[0])
             df = pd.merge(df, motive_complexity, how='inner', on='protein_id')
@@ -535,7 +535,7 @@ def chromosome_results(base_dict, param_dict, codes_list, viz_lvl, ann_dict, chr
         param_df = param_df[param_df['chromosome'] == chr_num]
         data, trace_dict = broken_bars(make_chr_data(base_df, param_df, ann_proteins),  0, 4)
         fig = go.Figure(data)
-        
+
         if light is not None:
             light = [light] if isinstance(light, str) else light
             lights=base_df.loc[base_df['protein_id'].isin(light)]
@@ -564,7 +564,7 @@ def chromosome_results(base_dict, param_dict, codes_list, viz_lvl, ann_dict, chr
                                    ay=25,
                                    hoverlabel_bgcolor="#e67300",
                                    hovertext=row["protein_id"])
-            
+
         fig.update_layout(showlegend=True, plot_bgcolor='white',
                           legend=dict(orientation="h",
                                       yanchor="bottom",
@@ -650,7 +650,7 @@ def multi_viz(specimen_path, param_dict, ann_dict, annotation, raw_dict, chromos
         lista = [annotation] if isinstance(annotation, str) else annotation
         if sorter:
             raw_df = pd.DataFrame(raw_dict)
-            lista = raw_df.loc[raw_df['protein_id'].isin(lista)]['protein_id']    
+            lista = raw_df.loc[raw_df['protein_id'].isin(lista)]['protein_id']
 
         if scaler:
             raw_df=pd.DataFrame(raw_dict)
@@ -666,7 +666,7 @@ def multi_viz(specimen_path, param_dict, ann_dict, annotation, raw_dict, chromos
         else:
             scale_list=[1]*len(lista)
             ticks=100
-            
+
         if alignments and len(lista)==1:
             param_df=pd.DataFrame(param_dict)
             param_df=param_df.loc[param_df['chromosome']== chromosome]
@@ -674,12 +674,12 @@ def multi_viz(specimen_path, param_dict, ann_dict, annotation, raw_dict, chromos
             for index, row in param_df.iterrows():
                 aligner=Align.PairwiseAligner(mode="global", open_gap_score=-10, extend_gap_score=-0.5)
                 aligner.substitution_matrix = substitution_matrices.load("BLOSUM62")
-                aligns=aligner.align(chosen,row["seq"])                
+                aligns=aligner.align(chosen,row["seq"])
                 for align in aligns:
                     if align.score >= int(treshold):
                         found.append(row["protein_id"])
                     break
-                
+
                 for align in aligns:
                     if align.score >= int(treshold):
                         a.append([row['protein_id'],align,align.score])
@@ -689,12 +689,26 @@ def multi_viz(specimen_path, param_dict, ann_dict, annotation, raw_dict, chromos
                     if j[0]==f:
                         b.append(j[1:])
                 for i in b:
-                    print(str(i[0]))
+                    jjj=str(i[0]).split()
+                    aaa=html.Div([html.Pre(f"{jjj[0]} {jjj[1]} {jjj[2]} {jjj[3]}\n       {jjj[4]} {jjj[5]} {jjj[6]}\n{jjj[7]}  {jjj[8]} {jjj[9]} {jjj[10]}")])    
+                    # jjj.insert(1, " ")
+                    # jjj.insert(3, " ")
+                    # jjj.insert(5, " ")
+                    # jjj.insert(7, "\n")
+                    # jjj.insert(8, "       ")
+                    # jjj.insert(10, " ")
+                    # jjj.insert(12, " ")
+                    # jjj.insert(14, "\n")
+                    # jjj.insert(16, "  ")
+                    # jjj.insert(18, " ")
+                    # jjj.insert(20, " ")
+                    # aaa="".join(jjj)
+                    # print(aaa)
 
-                align_vis.append(html.Details([html.Summary(f), html.Div([display_seq(specimen_path, param_dict, ann_dict, f, 0.9, ticks, alignments), str(b[0][0]), html.Br(), b[0][1]])]))    
-                    
-            found.remove(lista[0])   
-            
+                align_vis.append(html.Details([html.Summary(f), html.Div([display_seq(specimen_path, param_dict, ann_dict, f, 0.9, ticks, alignments), aaa])]))
+
+            found.remove(lista[0])
+
         for seq,scalers in zip(lista, scale_list):
                 visuals.append(display_seq(specimen_path, param_dict, ann_dict, seq, scalers, ticks, False))
         if len(lista)>1:
@@ -724,18 +738,18 @@ def display_seq(specimen_path, param_dict, ann_dict, seq, scaler, ticks, name):
     features = [GraphicFeature(start=row['start'], end=row['end'], label=f"{row['code']} - {row['name']}",
                                 color=colors[index]) for
                 index, row in annotations[annotations['protein_id'] == seq].reset_index().iterrows()]
-    
+
     motif_features=[]
     for amyloid in motifs:
         if amyloid['protein_id'] == seq:
             label = GraphicRecord._format_label(None, label=f"{amyloid['code']} - {amyloid['name']}", max_label_length=200, max_line_length=100)
             motif_features = [GraphicFeature(start=amyloid['start'], end=amyloid['end'], label=label, color="#964201")]
-    
+
     record = GraphicRecord(sequence_length=seq_len_dict[seq], features=features, ticks_resolution=ticks)
     record_amyloid = GraphicRecord(sequence_length=seq_len_dict[seq], features=motif_features, ticks_resolution=ticks)
-    
+
     szer = float((16*scaler)+1)
-    ax, _ = record.plot(figure_width=szer, level_offset=1)
+    ax, _ = record.plot(figure_width=szer)
     ax, _ = record_amyloid.plot(ax=ax, figure_width=szer, max_label_length=67, max_line_length=30)
     plt.tight_layout()
     ploting = ax.figure
@@ -743,7 +757,7 @@ def display_seq(specimen_path, param_dict, ann_dict, seq, scaler, ticks, name):
     w_size = float((95*scaler)+ 5)
     if name:
         return html.Div([html.Img(title=seq, id='cur_plot', src=out_url, style={'width': f'{w_size}%'}), html.Br(), html.Br()])
-    else:    
+    else:
         return html.Div([seq, html.Br(), html.Img(title=seq, id='cur_plot', src=out_url, style={'width': f'{w_size}%'}), html.Br(), html.Br()])
 
 
