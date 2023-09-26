@@ -171,6 +171,7 @@ def calc_stats(df_list, codes_list):
 
 def make_complexity(sp,vista):
     seq = load_fasta_file(glob(f'{sp}/*.faa')[0])
+    print(seq)
     fs = FeatureSet("")
     fs.add(Feature(entropy, window=int(vista)).then(min))
     ent = [{'protein_id': s.identifier.split(" ", 1)[0], 'complexity': s.data[0]} for s in fs(seq)]
@@ -529,16 +530,20 @@ def initial_results(df_dict, ft, lst, lsbm, et, codes_list, chr_num_state, ann_d
     State('code-selection', 'value'),
     State('viz-level', 'value'),
     State('annotations', 'memory'),
+    State('single-chromosome-graph', 'relayoutData'),
     Input('chromosome-select', 'value'),
     Input('gene-select', 'value'),
     Input('Aligment', 'value'),
     prevent_initial_call=True
 )
-def chromosome_results(base_dict, param_dict, codes_list, viz_lvl, ann_dict, chr_num, light, aligment):
+def chromosome_results(base_dict, param_dict, codes_list, viz_lvl, ann_dict, relayout_data, chr_num, light, aligment):
     if chr_num and viz_lvl == 'Chromosome':
         if codes_list is None:
             codes_list = []
 
+        print(relayout_data)
+
+        
         annotations = pd.DataFrame(ann_dict)
         ann_proteins = annotations[annotations['code'].isin(codes_list)]['protein_id'].unique()
         base_df = pd.DataFrame(base_dict)
@@ -590,6 +595,20 @@ def chromosome_results(base_dict, param_dict, codes_list, viz_lvl, ann_dict, chr
                           )
         fig.update_xaxes({'showticklabels': False})
         fig.update_yaxes({'showticklabels': False})
+        if 'fig' in locals():
+            fig = copy.deepcopy(fig)
+        if aligment is None:
+            if relayout_data:
+                if 'xaxis.range[0]' in relayout_data:
+                    fig['layout']['xaxis']['range'] = [
+                        relayout_data['xaxis.range[0]'],
+                        relayout_data['xaxis.range[1]']
+                    ]
+                if 'yaxis.range[0]' in relayout_data:
+                    fig['layout']['yaxis']['range'] = [
+                        relayout_data['yaxis.range[0]'],
+                        relayout_data['yaxis.range[1]']
+                    ]
         return fig, {'display': 'block'}, trace_dict, {'display': 'block'}
     else:
         return dash.no_update, dash.no_update, dash.no_update, dash.no_update
@@ -696,7 +715,7 @@ def multi_viz(specimen_path, param_dict, ann_dict, annotation, raw_dict, chromos
             param_df=param_df.loc[param_df['chromosome']== chromosome]
             chosen=param_df.loc[param_df['protein_id'].isin(lista)]['seq'].values[0]
             for index, row in param_df.iterrows():
-                aligner=Align.PairwiseAligner(mode="global", open_gap_score=open_gap, extend_gap_score=extend_gap)
+                aligner=Align.PairwiseAligner(mode="global", open_gap_score=float(open_gap), extend_gap_score=float(extend_gap))
                 aligner.substitution_matrix = substitution_matrices.load("BLOSUM62")
                 aligns=aligner.align(chosen,row["seq"])
                 for align in aligns:
