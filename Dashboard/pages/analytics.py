@@ -119,7 +119,7 @@ def broken_bars(data, ystart, yh):
         fig_data.append(go.Scatter(x=[square['start'], square['end'], square['end'], square['start']],
                                    y=[ystart] * 2 + [ystart + yh] * 2,
                                    fill='toself',
-                                   hoveron='points+fills',
+                                   hoveron='fills+points',
                                    fillcolor=square['color'],
                                    mode='lines',
                                    line_color=square['color'],
@@ -171,7 +171,6 @@ def calc_stats(df_list, codes_list):
 
 def make_complexity(sp,vista):
     seq = load_fasta_file(glob(f'{sp}/*.faa')[0])
-    print(seq)
     fs = FeatureSet("")
     fs.add(Feature(entropy, window=int(vista)).then(min))
     ent = [{'protein_id': s.identifier.split(" ", 1)[0], 'complexity': s.data[0]} for s in fs(seq)]
@@ -249,7 +248,7 @@ contents = html.Div(children=[
                 )
             ]),
             dbc.Col([
-                html.B('Maximum entropy for above specified window size(if 0 entropy will not be claculated):'),
+                html.B('Maximum entropy for above specified window size'),
                 html.Br(),
                 dbc.Input(
                     id='entropy-threshold',
@@ -286,8 +285,7 @@ contents = html.Div(children=[
                 ),
                 html.Br(),
             ], style={'display': 'none'}, id='chromosome-select-container'),
-            dcc.Graph(id='single-chromosome-graph',
-                      style={'display': 'none'}),
+            dcc.Graph(id='single-chromosome-graph', style={'display': 'none'}),
             html.Div([
                 html.B('Select a protein:'),
                 html.Br(),
@@ -436,8 +434,6 @@ def show_radio(n_clicks):
     Output('raw-df', 'memory'),
     Output('target-df', 'memory', allow_duplicate=True),
     Output('gene-select-container', 'style', allow_duplicate=True),
-    Output('chromosome-select', 'value'),
-    Output('stats-chromosome-select', 'options'),
     Output('gene-select', 'value'),
     State('raw-df', 'memory'),
     State('feature-type', 'value'),
@@ -445,14 +441,13 @@ def show_radio(n_clicks):
     State('ls-bias-margin', 'value'),
     State('entropy-threshold', 'value'),
     State('code-selection', 'value'),
-    State('chromosome-select', 'value'),
     State('annotations', 'memory'),
     State('specimen-dropdown', 'value'),
     State('vista','value'),
     Input('viz-level', 'value'),
     prevent_initial_call=True
 )
-def initial_results(df_dict, ft, lst, lsbm, et, codes_list, chr_num_state, ann_dict, specimen_path, vista, viz_level):
+def initial_results(df_dict, ft, lst, lsbm, et, codes_list, ann_dict, specimen_path, vista, viz_level):
     lst, lsbm, et = float(lst), float(lsbm), float(et)
     if codes_list is None:
         codes_list = []
@@ -512,12 +507,12 @@ def initial_results(df_dict, ft, lst, lsbm, et, codes_list, chr_num_state, ann_d
         return [dbc.Button('Save image'), html.Br(), html.Br(),
                 html.Img(id='cur_plot', src=out_url, style={'width': '100%'})], {'display': 'none'}, dash.no_update, \
                {'display': 'none'}, base_df.to_dict('records'), param_df.to_dict('records'), {'display': 'none'}, \
-               dash.no_update, chromosomes, dash.no_update
+               dash.no_update
 
     elif viz_level == 'Chromosome':
 
         return html.Div(), {'display': 'block'}, chromosomes, dash.no_update, dash.no_update, dash.no_update, \
-               {'display': 'none'}, chr_num_state, dash.no_update, []
+               {'display': 'none'}, []
 
 
 @callback(
@@ -531,88 +526,119 @@ def initial_results(df_dict, ft, lst, lsbm, et, codes_list, chr_num_state, ann_d
     State('viz-level', 'value'),
     State('annotations', 'memory'),
     State('single-chromosome-graph', 'relayoutData'),
-    Input('chromosome-select', 'value'),
     Input('gene-select', 'value'),
     Input('Aligment', 'value'),
+    Input('viz-level', 'value'),
     prevent_initial_call=True
 )
-def chromosome_results(base_dict, param_dict, codes_list, viz_lvl, ann_dict, relayout_data, chr_num, light, aligment):
-    if chr_num and viz_lvl == 'Chromosome':
-        if codes_list is None:
-            codes_list = []
-
-        print(relayout_data)
-
-        
-        annotations = pd.DataFrame(ann_dict)
-        ann_proteins = annotations[annotations['code'].isin(codes_list)]['protein_id'].unique()
+def multi_chr(base_dict, param_dict, codes_list, viz_lvl, ann_dict, relayout_data, light, aligment, viz_level):
+    if viz_lvl == 'Chromosome':
+        vizz=[]
+        trace_dict=[]
+        scale=[]
         base_df = pd.DataFrame(base_dict)
-        param_df = pd.DataFrame(param_dict)
-        base_df = base_df[base_df['chromosome'] == chr_num]
-        param_df = param_df[param_df['chromosome'] == chr_num]
-        data, trace_dict = broken_bars(make_chr_data(base_df, param_df, ann_proteins),  0, 4)
-        fig = go.Figure(data)
+        unike=base_df['chromosome'].unique()
+        
+        if scale:
+            for i in range(len(unike)):
+                base_df_chrn = base_df[base_df['chromosome'] == unike[i]]
+                scale.append(base_df_chrn.iloc[-1]['end'])
+            maxi=max(scale)
+            temp=[]    
+            for i in scale:
+                temp.append(i/maxi)
+            scale=temp
+        else:
+            scale=[1]*len(unike)
+        figgs=[]  
+        figgz=None  
+        for i in range(len(unike)):            
+            figg, trace=chromosome_results(base_df, param_dict, codes_list, ann_dict, relayout_data, unike[i], light, aligment, i, figgz)
+            figgz=figg
+            trace_dict.append(trace)
+            w_size=100*scale[i]
+            figgs.append(dcc.Graph(figure=figg, style={'width': f'{w_size}%'}))
 
-        if light is not None:
-            light = [light] if isinstance(light, str) else light
-            lights=base_df.loc[base_df['protein_id'].isin(light)]
-            for index, row in lights.iterrows():
-                fig.add_annotation(x=((row['end']-row["start"])/2)+row["start"],
-                                   y=4,
-                                   showarrow=True,
-                                   arrowhead=2,
-                                   arrowsize=2,
-                                   arrowwidth=1,
-                                   arrowcolor="#26E70E",
-                                   ax=0,
-                                   hoverlabel_bgcolor="#26E70E",
-                                   hovertext=row["protein_id"])
-        if aligment is not None:
-            aligments=base_df.loc[base_df['protein_id'].isin(aligment)]
-            for index, row in aligments.iterrows():
-                fig.add_annotation(x=((row['end']-row["start"])/2)+row["start"],
-                                   y=0,
-                                   showarrow=True,
-                                   arrowhead=3,
-                                   arrowsize=2,
-                                   arrowwidth=1,
-                                   arrowcolor="#e67300",
-                                   ax=0,
-                                   ay=25,
-                                   hoverlabel_bgcolor="#e67300",
-                                   hovertext=row["protein_id"])
-
-        fig.update_layout(showlegend=True, plot_bgcolor='white',
-                          legend=dict(orientation="h",
-                                      yanchor="bottom",
-                                      y=1.02,
-                                      xanchor="left",
-                                      x=0,
-                                      itemclick=False,
-                                      itemdoubleclick=False),
-                          margin=dict(t = 2, b = 1, l = 3, r = 3),
-                          height=250
-                          )
-        fig.update_xaxes({'showticklabels': False})
-        fig.update_yaxes({'showticklabels': False})
-
-        if 'fig' in locals(): # source: https://community.plotly.com/t/how-to-save-current-zoom-and-position-after-filtering/5310
-            fig = copy.deepcopy(fig)
-        if aligment is None or aligment is False:
-            if relayout_data:
-                if 'xaxis.range[0]' in relayout_data:
-                    fig['layout']['xaxis']['range'] = [
-                        relayout_data['xaxis.range[0]'],
-                        relayout_data['xaxis.range[1]']
-                    ]
-                if 'yaxis.range[0]' in relayout_data:
-                    fig['layout']['yaxis']['range'] = [
-                        relayout_data['yaxis.range[0]'],
-                        relayout_data['yaxis.range[1]']
-                    ]
-        return fig, {'display': 'block'}, trace_dict, {'display': 'block'}
+            # callback(figg.callback_output(),
+            #                   figg.callback_inputs())(figg.callback_update)
+            # 
+            # vizz.append(html.P([html.B(unike[i]),dcc.Graph(figure=figg, style={'width': f'{w_size}%'}), html.Br()]))
+        # graph_list=[GraphFactory(feature=f) for f in figgs]
+        figgz.update_layout(showlegend=False, plot_bgcolor='white',
+                      margin=dict(t = 2, b = 1, l = 3, r = 3),
+                      height=500
+                      )
+        figgz.update_xaxes({'showticklabels': False})
+        figgz.update_yaxes({'showticklabels': False})
+        
+        return figgz, {'display': 'block'}, trace_dict, {'display': 'block'}
     else:
         return dash.no_update, dash.no_update, dash.no_update, dash.no_update
+        
+        
+def chromosome_results(base_df, param_dict, codes_list, ann_dict, relayout_data, chr_num, light, aligment, iterate, figgz):
+    if codes_list is None:
+        codes_list = []
+    annotations = pd.DataFrame(ann_dict)
+    ann_proteins = annotations[annotations['code'].isin(codes_list)]['protein_id'].unique()
+    param_df = pd.DataFrame(param_dict)
+    base_df = base_df[base_df['chromosome'] == chr_num]
+    param_df = param_df[param_df['chromosome'] == chr_num]
+    data, trace_dict = broken_bars(make_chr_data(base_df, param_df, ann_proteins),  (iterate*-4)-3.2, 3.2)
+    fig = go.Figure(data)
+
+    # if light is not None:
+    #     light = [light] if isinstance(light, str) else light
+    #     lights=base_df.loc[base_df['protein_id'].isin(light)]
+    #     for index, row in lights.iterrows():
+    #         fig.add_annotation(x=((row['end']-row["start"])/2)+row["start"],
+    #                             y=4,
+    #                             showarrow=True,
+    #                             arrowhead=2,
+    #                             arrowsize=2,
+    #                             arrowwidth=1,
+    #                             arrowcolor="#26E70E",
+    #                             ax=0,
+    #                             hoverlabel_bgcolor="#26E70E",
+    #                             hovertext=row["protein_id"])
+            
+    # if aligment is not None:
+    #     aligments=base_df.loc[base_df['protein_id'].isin(aligment)]
+    #     for index, row in aligments.iterrows():
+    #         fig.add_annotation(x=((row['end']-row["start"])/2)+row["start"],
+    #                             y=0,
+    #                             showarrow=True,
+    #                             arrowhead=3,
+    #                             arrowsize=2,
+    #                             arrowwidth=1,
+    #                             arrowcolor="#e67300",
+    #                             ax=0,
+    #                             ay=25,
+    #                             hoverlabel_bgcolor="#e67300",
+    #                             hovertext=row["protein_id"])
+
+    
+    if 'fig' in locals(): # source: https://community.plotly.com/t/how-to-save-current-zoom-and-position-after-filtering/5310
+        fig = copy.deepcopy(fig)
+    if aligment is None or aligment is False:
+        if relayout_data:
+            if 'xaxis.range[0]' in relayout_data:
+                fig['layout']['xaxis']['range'] = [
+                    relayout_data['xaxis.range[0]'],
+                    relayout_data['xaxis.range[1]']
+                ]
+            if 'yaxis.range[0]' in relayout_data:
+                fig['layout']['yaxis']['range'] = [
+                    relayout_data['yaxis.range[0]'],
+                    relayout_data['yaxis.range[1]']
+                ]
+    if figgz is None:
+        return (fig, trace_dict)
+    else:
+        for t in fig.data:
+            figgz.add_trace(t)
+        return(figgz,trace_dict)
+
 
 
 @callback(
@@ -633,9 +659,24 @@ def chromosome_results(base_dict, param_dict, codes_list, viz_lvl, ann_dict, rel
 )
 def seq_display(base_dict, chr_num_state, trace_dict, annotation, param_dict, click_data):
     base_df = pd.DataFrame(base_dict)
+    print("ggg")
     if ctx.triggered_id == 'single-chromosome-graph' and click_data['points'][0]['curveNumber'] != 0:
-        options = base_df[base_df['chromosome'] == chr_num_state]['protein_id'].unique()
-        selected = trace_dict[str(click_data['points'][0]['curveNumber'])]
+        options = base_df['protein_id'].unique()
+        a=[]
+        b=[]
+        c=0
+        for i in trace_dict:
+            a.append(len(i))
+            c=sum(a)
+            b.append(c)
+        for i in range(len(b)):
+            if click_data['points'][0]['curveNumber']<b[i]:
+                if i==0:
+                    temp=0
+                else:
+                    temp=sum(a[:i])
+                selected=trace_dict[i][str(click_data['points'][0]['curveNumber']-temp)]
+                break
         
         select_list=[selected]
         param_df=pd.DataFrame(param_dict)
@@ -713,7 +754,6 @@ def multi_viz(specimen_path, param_dict, ann_dict, annotation, raw_dict, chromos
 
         if alignments and len(lista)==1:
             param_df=pd.DataFrame(param_dict)
-            param_df=param_df.loc[param_df['chromosome']== chromosome]
             chosen=param_df.loc[param_df['protein_id'].isin(lista)]['seq'].values[0]
             for index, row in param_df.iterrows():
                 aligner=Align.PairwiseAligner(mode="global", open_gap_score=float(open_gap), extend_gap_score=float(extend_gap))
@@ -721,6 +761,7 @@ def multi_viz(specimen_path, param_dict, ann_dict, annotation, raw_dict, chromos
                 aligns=aligner.align(chosen,row["seq"])
                 for align in aligns:
                     if align.score >= int(treshold):
+                        print("L")
                         found.append(row["protein_id"])
                     break
 
@@ -731,20 +772,19 @@ def multi_viz(specimen_path, param_dict, ann_dict, annotation, raw_dict, chromos
                 batch=[]
                 for row in align_data:
                     if row[0]==f:
+                        print("J")
                         batch.append(row[1:])
                 for part in batch:
                     align_str=str(part[0]).split()
                     outcome=html.Div([html.Pre(f"{align_str[0]} {align_str[1]} {align_str[2]} {align_str[3]}\n       {align_str[4]} {align_str[5]} {align_str[6]}\n{align_str[7]}  {align_str[8]} {align_str[9]} {align_str[10]}\nScore: {part[1]}")])    
 
                 align_vis.append(html.Details([html.Summary(f), html.Div([display_seq(specimen_path, param_dict, ann_dict, f, 0.9, ticks, alignments), outcome])]))
-
             found.remove(lista[0])
 
         for seq,scalers in zip(lista, scale_list):
                 visuals.append(display_seq(specimen_path, param_dict, ann_dict, seq, scalers, ticks, False))
         
         param_df=pd.DataFrame(param_dict)
-        param_df=param_df.loc[param_df['chromosome'] == chromosome]
         chosen=param_df.loc[param_df['protein_id'].isin(lista)]
         if len(lista)==1 and len(chosen)>0:
             return visuals, found, True, True, False, align_vis, {'display': 'block'}
