@@ -1,5 +1,5 @@
 import dash
-import dash_daq as daq
+import dash_daq as daq # was needed for switches
 from .utilities import render_layout
 import os
 from dash import html, dcc, callback, Input, Output, State, ctx, dash_table
@@ -19,7 +19,7 @@ from quantiprot.utils.io import load_fasta_file
 from quantiprot.utils.feature import Feature, FeatureSet
 from quantiprot.metrics.entropy import entropy
 import matplotlib
-import copy
+import copy # neededn to save zoom on the plot
 
 matplotlib.use('agg')
 
@@ -125,6 +125,7 @@ def broken_bars(data, ystart, yh):
                                    line_color=square['color'],
                                    name=square['name'],
                                    text=f"{square['id'][0]} ({square['id'][1]})",
+                                   hoverinfo='text',
                                    showlegend=flag),
                         )
     return fig_data, trace_dict
@@ -171,11 +172,10 @@ def calc_stats(df_list, codes_list):
 
 def make_complexity(sp,vista):
     seq = load_fasta_file(glob(f'{sp}/*.faa')[0])
-    print(seq)
     fs = FeatureSet("")
     fs.add(Feature(entropy, window=int(vista)).then(min))
     ent = [{'protein_id': s.identifier.split(" ", 1)[0], 'complexity': s.data[0]} for s in fs(seq)]
-    pd.DataFrame(ent).to_csv(f'{sp}/complexity{vista}.csv')
+    pd.DataFrame(ent).to_csv(f'{sp}/complexity{vista}.csv') # bc of ability to change window size of entropy there is variable that changes name of the files
 
 dash.register_page(__name__, path='/analytics')
 
@@ -240,7 +240,7 @@ contents = html.Div(children=[
                 )
             ]),
             dbc.Col([
-                html.B('Window size:'),
+                html.B('Window size:'), # added ability to choose window size to calculate entropy
                 html.Br(),
                 dbc.Input(
                     id='vista',
@@ -248,8 +248,8 @@ contents = html.Div(children=[
                     required=True
                 )
             ]),
-            dbc.Col([
-                html.B('Maximum entropy for above specified window size(if 0 entropy will not be claculated):'),
+            dbc.Col([ 
+                html.B('Maximum entropy for above specified window size:'), # changed label to reflect changes in hoentropy is claculated and processed  
                 html.Br(),
                 dbc.Input(
                     id='entropy-threshold',
@@ -273,7 +273,7 @@ contents = html.Div(children=[
         dcc.Tab(children=[
             html.Br(),
             dbc.RadioItems(
-                ['Genome', 'Chromosome'],
+                ['Genome', 'Chromosome'], # removed protein view bc it is unnecessary now
                 inline=True,
                 style={'display': 'none'},
                 id='viz-level'
@@ -289,26 +289,26 @@ contents = html.Div(children=[
             dcc.Graph(id='single-chromosome-graph',
                       style={'display': 'none'}),
             html.Div([
-                html.B('Select a protein:'),
+                html.B('Select a protein:'), # merged from protein window
                 html.Br(),
-                dcc.Dropdown(multi=True,
+                dcc.Dropdown(multi=True, # allows to choose ultiple protein at the same time
                              clearable=True,
                              searchable=True,
                              id='gene-select'
                 ),
-                dcc.Dropdown(multi=True,
+                dcc.Dropdown(multi=True, # storage for align proteins
                              id='Aligment',
                              style={'display':'none'}
                 ),
-                dbc.Row([
+                dbc.Row([ # buttons to activate new fucionalities
                     dbc.Col(daq.BooleanSwitch(label="Alignment", labelPosition="top", id='aligment_switch', style={'display': 'none'}, on=False, disabled=False, color='#68CDA3')),
                     dbc.Col(daq.BooleanSwitch(label="Sort", labelPosition="top", id='sort_switch', style={'display': 'none'}, on=False, disabled=True, color='#68CDA3')),
                     dbc.Col(daq.BooleanSwitch(label="Scale", labelPosition="top", id='scale_switch', style={'display': 'none'}, on=False, disabled=True, color='#68CDA3'))
                 ]),
 
                 html.Br(),
-                html.Div([
-                    dbc.Row([
+                html.Div([ # parameters for scoring of aligment
+                    dbc.Row([ 
                         dbc.Col([
                             html.B('Score treshold:'),
                             dbc.Input(
@@ -321,7 +321,7 @@ contents = html.Div(children=[
                             html.B('Open gap score:'),
                             dbc.Input(
                                 id='open-gap',
-                                value=-10,
+                                value=-14,
                                 required=True,
                                 style={'width':125}
                             )]),
@@ -329,7 +329,7 @@ contents = html.Div(children=[
                             html.B('Extend gap score:'),
                             dbc.Input(
                                 id='extend-gap',
-                                value=-0.5,
+                                value=-4,
                                 required=True,
                                 style={'width':125}
                             )])
@@ -339,7 +339,7 @@ contents = html.Div(children=[
 
             ], style={'display': 'none'}, id='gene-select-container'),
             html.Div(id='results'),
-            html.Div(id='align-res'),
+            html.Div(id='align-res'), # div for aligned proteins
             html.Br(),
         ], label='Visualization', value='viz'),
         dcc.Tab(children=[
@@ -395,7 +395,7 @@ def display_parameters(specimen_path):
                                 header=None,
                                 names=['protein_id', 'protein_subid', 'protein_len', 'base', 'code', 'name', 'start',
                                        'end', 'e-value', 'mark', 'date', 'seq', 'decr']
-                                )
+                                ) # moved calculation of entropy furtherdown in the code
     features['protein_id'] = features.apply(lambda x: x['related_accession'] if x['# feature'] == 'mRNA'
     else (x['product_accession'] if x['# feature'] == 'CDS'
           else np.nan), axis=1)
@@ -438,7 +438,7 @@ def show_radio(n_clicks):
     Output('gene-select-container', 'style', allow_duplicate=True),
     Output('chromosome-select', 'value'),
     Output('stats-chromosome-select', 'options'),
-    Output('gene-select', 'value'),
+    Output('gene-select', 'value'), # added to clean data rememberd protein data
     State('raw-df', 'memory'),
     State('feature-type', 'value'),
     State('ls-threshold', 'value'),
@@ -447,7 +447,7 @@ def show_radio(n_clicks):
     State('code-selection', 'value'),
     State('chromosome-select', 'value'),
     State('annotations', 'memory'),
-    State('specimen-dropdown', 'value'),
+    State('specimen-dropdown', 'value'), # added to be able to calculate entropy/check if it was calculated
     State('vista','value'),
     Input('viz-level', 'value'),
     prevent_initial_call=True
@@ -458,14 +458,13 @@ def initial_results(df_dict, ft, lst, lsbm, et, codes_list, chr_num_state, ann_d
         codes_list = []
     annotations = pd.DataFrame(ann_dict)
     ann_proteins = annotations[annotations['code'].isin(codes_list)]['protein_id'].unique()
-
     df = pd.DataFrame(df_dict)
-
-    if et==0:
+    # calculation of entropy
+    if et==0: # if 0 entropy is not calculated at all
         base_df = df[df['# feature'] == ft]
         param_df = base_df[(base_df['log_score'] >= lst)
                          & (base_df['log_bias'] + lsbm < base_df['log_score'])]
-    else:
+    else: # else it is first checked if file wit specified window size exist
         if not glob(f'{specimen_path}/complexity{vista}.csv'):
             make_complexity(specimen_path, vista)
 
@@ -505,7 +504,7 @@ def initial_results(df_dict, ft, lst, lsbm, et, codes_list, chr_num_state, ann_d
                       labels=chromosomes)
         ax.set_xticks(ticks=[], labels=[])
         ax.legend(loc='lower right', prop={'size': 8})
-        fig.set_figwidth(15)
+        fig.set_figwidth(15) # increased size of the plot a bit
         fig.tight_layout()
 
         out_url = fig_to_uri(fig)
@@ -517,33 +516,29 @@ def initial_results(df_dict, ft, lst, lsbm, et, codes_list, chr_num_state, ann_d
     elif viz_level == 'Chromosome':
 
         return html.Div(), {'display': 'block'}, chromosomes, dash.no_update, dash.no_update, dash.no_update, \
-               {'display': 'none'}, chr_num_state, dash.no_update, []
+               {'display': 'none'}, chr_num_state, dash.no_update, [] # empty list to clean aforementioned protein data
 
 
 @callback(
     Output('single-chromosome-graph', 'figure'),
     Output('single-chromosome-graph', 'style', allow_duplicate=True),
     Output('trace-dict', 'memory'),
-    Output('gene-select-container', 'style', allow_duplicate=True),
+    Output('gene-select-container', 'style', allow_duplicate=True), # merging of protein and chromosome view
     State('raw-df', 'memory'),
     State('target-df', 'memory'),
     State('code-selection', 'value'),
     State('viz-level', 'value'),
-    State('annotations', 'memory'),
-    State('single-chromosome-graph', 'relayoutData'),
+    State('annotations', 'memory'), 
+    State('single-chromosome-graph', 'relayoutData'), # information needed to stop dezooming every time protein is selected
     Input('chromosome-select', 'value'),
-    Input('gene-select', 'value'),
-    Input('Aligment', 'value'),
+    Input('gene-select', 'value'), # refresh needed to show on the chromosome plot where is selected protein
+    Input('Aligment', 'value'), # refresh needed to show on the chromosome plot where are align proteins
     prevent_initial_call=True
 )
 def chromosome_results(base_dict, param_dict, codes_list, viz_lvl, ann_dict, relayout_data, chr_num, light, aligment):
     if chr_num and viz_lvl == 'Chromosome':
         if codes_list is None:
-            codes_list = []
-
-        print(relayout_data)
-
-        
+            codes_list = []        
         annotations = pd.DataFrame(ann_dict)
         ann_proteins = annotations[annotations['code'].isin(codes_list)]['protein_id'].unique()
         base_df = pd.DataFrame(base_dict)
@@ -553,7 +548,7 @@ def chromosome_results(base_dict, param_dict, codes_list, viz_lvl, ann_dict, rel
         data, trace_dict = broken_bars(make_chr_data(base_df, param_df, ann_proteins),  0, 4)
         fig = go.Figure(data)
 
-        if light is not None:
+        if light is not None: # funcion to highlight selected proteins on the chromosome plot with arrows
             light = [light] if isinstance(light, str) else light
             lights=base_df.loc[base_df['protein_id'].isin(light)]
             for index, row in lights.iterrows():
@@ -564,10 +559,10 @@ def chromosome_results(base_dict, param_dict, codes_list, viz_lvl, ann_dict, rel
                                    arrowsize=2,
                                    arrowwidth=1,
                                    arrowcolor="#26E70E",
-                                   ax=0,
+                                   ax=0, # arrow is pointing straight down
                                    hoverlabel_bgcolor="#26E70E",
                                    hovertext=row["protein_id"])
-        if aligment is not None:
+        if aligment is not None: # funcion to highlight aligned proteins on the chromosome plot with arrows
             aligments=base_df.loc[base_df['protein_id'].isin(aligment)]
             for index, row in aligments.iterrows():
                 fig.add_annotation(x=((row['end']-row["start"])/2)+row["start"],
@@ -577,8 +572,8 @@ def chromosome_results(base_dict, param_dict, codes_list, viz_lvl, ann_dict, rel
                                    arrowsize=2,
                                    arrowwidth=1,
                                    arrowcolor="#e67300",
-                                   ax=0,
-                                   ay=25,
+                                   ax=0, 
+                                   ay=25, # arrow is pointing straight up
                                    hoverlabel_bgcolor="#e67300",
                                    hovertext=row["protein_id"])
 
@@ -587,10 +582,10 @@ def chromosome_results(base_dict, param_dict, codes_list, viz_lvl, ann_dict, rel
                                       yanchor="bottom",
                                       y=1.02,
                                       xanchor="left",
-                                      x=0,
-                                      itemclick=False,
+                                      x=0, # moved legend bc now that margins are lower it would interfeere with controls
+                                      itemclick=False, # blocked legend controls bc of the way that plot is created it didn't work in any meaningfull way
                                       itemdoubleclick=False),
-                          margin=dict(t = 2, b = 1, l = 3, r = 3),
+                          margin=dict(t = 2, b = 1, l = 3, r = 3), # decreased the margins to use more of the availeble space
                           height=250
                           )
         fig.update_xaxes({'showticklabels': False})
@@ -598,7 +593,7 @@ def chromosome_results(base_dict, param_dict, codes_list, viz_lvl, ann_dict, rel
 
         if 'fig' in locals(): # source: https://community.plotly.com/t/how-to-save-current-zoom-and-position-after-filtering/5310
             fig = copy.deepcopy(fig)
-        if aligment is None or aligment is False:
+        if aligment is None or aligment is False: # blocks the zoomout during protein selection butwhen aligment is chossen it un blocksto show where aligments are located
             if relayout_data:
                 if 'xaxis.range[0]' in relayout_data:
                     fig['layout']['xaxis']['range'] = [
@@ -617,12 +612,12 @@ def chromosome_results(base_dict, param_dict, codes_list, viz_lvl, ann_dict, rel
 
 @callback(
     Output('single-chromosome-graph', 'style', allow_duplicate=True),
-    Output('gene-select', 'options'),
+    Output('gene-select', 'options'), # removal of some callbacks due to merging of protein and chromosomal view
     Output('gene-select', 'value', allow_duplicate=True),
-    Output('sort_switch', 'style'),
+    Output('sort_switch', 'style'), # changing visibility of buttons that activate new fucinalities
     Output('scale_switch', 'style'),
     Output('aligment_switch', 'style'),
-    Output('score-threshold-container', 'style', allow_duplicate=True),
+    Output('score-threshold-container', 'style', allow_duplicate=True), # changing visibility of aligment score boxes
     State('raw-df', 'memory'),
     State('chromosome-select', 'value'),
     State('trace-dict', 'memory'),
@@ -635,8 +630,8 @@ def seq_display(base_dict, chr_num_state, trace_dict, annotation, param_dict, cl
     base_df = pd.DataFrame(base_dict)
     if ctx.triggered_id == 'single-chromosome-graph' and click_data['points'][0]['curveNumber'] != 0:
         options = base_df[base_df['chromosome'] == chr_num_state]['protein_id'].unique()
-        selected = trace_dict[str(click_data['points'][0]['curveNumber'])]
         
+        selected = trace_dict[str(click_data['points'][0]['curveNumber'])] # ability to choose many proteins at the same time 
         select_list=[selected]
         param_df=pd.DataFrame(param_dict)
         param_df=param_df.loc[param_df['chromosome']== chr_num_state]
@@ -651,6 +646,10 @@ def seq_display(base_dict, chr_num_state, trace_dict, annotation, param_dict, cl
         return dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
 
 def appending(selected, annotation):
+    '''
+    fuction to facilitate ability to choose many proteins as well as ability to deselect them based on 
+    the selected one and if exist at the moment list of list of allready chosen ones
+    '''
     annotation=[annotation] if len(annotation[0]) == 1 else annotation
     if selected not in annotation:
         annotation.append(selected)
@@ -663,28 +662,32 @@ def appending(selected, annotation):
 
 @callback(
     Output('results', 'children', allow_duplicate=True),
-    Output('Aligment', 'value'),
-    Output('sort_switch', 'disabled'),
+    Output('Aligment', 'value'), # informations about aligned proteins
+    Output('sort_switch', 'disabled'), # activating/deactivating switches
     Output('scale_switch', 'disabled'),
     Output('aligment_switch', 'disabled'),
-    Output('align-res', 'children'),
-    Output('score-threshold-container', 'style', allow_duplicate=True),
+    Output('align-res', 'children'), # showing all of the aligments
+    Output('score-threshold-container', 'style', allow_duplicate=True), # changeing visibility of aligment score controlls
     State('specimen-dropdown', 'value'),
     State('target-df', 'memory'),
     State('annotations', 'memory'),
     State('gene-select', 'value'),
-    State('raw-df', 'memory'),
+    State('raw-df', 'memory'), # needed data to know order of proteins on the chromosome
     State('chromosome-select', 'value'),
-    State('open-gap', 'value'),
+    State('open-gap', 'value'), # data about aligment scores
     State('extend-gap', 'value'),
-    Input('sort_switch', 'on'),
+    Input('sort_switch', 'on'), # information if user want new fucionalities
     Input('scale_switch', 'on'),
     Input('aligment_switch', 'on'),
     Input('gene-select', 'value'),
-    Input('score-threshold', 'value'),
+    Input('score-threshold', 'value'), # dynamic change of treshold of the aligment score 
     prevent_initial_call=True
 )
 def multi_viz(specimen_path, param_dict, ann_dict, annotation, raw_dict, chromosome, open_gap, extend_gap, sorter, scaler, alignments, value, treshold):
+    '''
+    fuction that allows you to show many proteins at the same time;
+    it mostly takes input for display_seq to run it, but also some other opisons that modified the flow of the code  
+    '''
     visuals=[]
     found=[]
     align_data=[]
@@ -692,11 +695,11 @@ def multi_viz(specimen_path, param_dict, ann_dict, annotation, raw_dict, chromos
     if len(annotation) > 0:
         scale_list=[]
         lista = [annotation] if isinstance(annotation, str) else annotation
-        if sorter:
+        if sorter: # based on the position of the switch proteins are shown in order they where chosen or order that they appear on the chromosome
             raw_df = pd.DataFrame(raw_dict)
             lista = raw_df.loc[raw_df['protein_id'].isin(lista)]['protein_id']
 
-        if scaler:
+        if scaler: # based on the position of the switch proteins are aproximetly scaled based on their relative size
             raw_df=pd.DataFrame(raw_dict)
             raw_df=raw_df.drop_duplicates(subset=['protein_id'])
             for i in lista:
@@ -711,16 +714,16 @@ def multi_viz(specimen_path, param_dict, ann_dict, annotation, raw_dict, chromos
             scale_list=[1]*len(lista)
             ticks=100
 
-        if alignments and len(lista)==1:
+        if alignments and len(lista)==1: # if one protein is chosen and it has amyloid sygnalling motiff and switch is switched the parwise globall aligment of this amyloid sequence to other  amyloid sequences on the chromosome will be performed
             param_df=pd.DataFrame(param_dict)
-            param_df=param_df.loc[param_df['chromosome']== chromosome]
+            param_df=param_df.loc[param_df['chromosome'] == chromosome]
             chosen=param_df.loc[param_df['protein_id'].isin(lista)]['seq'].values[0]
             for index, row in param_df.iterrows():
-                aligner=Align.PairwiseAligner(mode="global", open_gap_score=float(open_gap), extend_gap_score=float(extend_gap))
-                aligner.substitution_matrix = substitution_matrices.load("BLOSUM62")
+                aligner=Align.PairwiseAligner(mode="global", open_gap_score=float(open_gap), extend_gap_score=float(extend_gap)) # choosing too leanient scores can crash the program as there could be >2^63 of valid aligments; if more granular approach is needed pls check Biopython documentation
+                aligner.substitution_matrix = substitution_matrices.load("BLOSUM62") # chosen sustitisuion matrix()
                 aligns=aligner.align(chosen,row["seq"])
                 for align in aligns:
-                    if align.score >= int(treshold):
+                    if align.score >= int(treshold): # only aligments with score above/the same as chosen treshold will be chosen
                         found.append(row["protein_id"])
                     break
 
@@ -734,14 +737,14 @@ def multi_viz(specimen_path, param_dict, ann_dict, annotation, raw_dict, chromos
                         batch.append(row[1:])
                 for part in batch:
                     align_str=str(part[0]).split()
-                    outcome=html.Div([html.Pre(f"{align_str[0]} {align_str[1]} {align_str[2]} {align_str[3]}\n       {align_str[4]} {align_str[5]} {align_str[6]}\n{align_str[7]}  {align_str[8]} {align_str[9]} {align_str[10]}\nScore: {part[1]}")])    
+                    outcome=html.Div([html.Pre(f"{align_str[0]} {align_str[1]} {align_str[2]} {align_str[3]}\n       {align_str[4]} {align_str[5]} {align_str[6]}\n{align_str[7]}  {align_str[8]} {align_str[9]} {align_str[10]}\nScore: {part[1]}")]) # formating of aligment data 
 
-                align_vis.append(html.Details([html.Summary(f), html.Div([display_seq(specimen_path, param_dict, ann_dict, f, 0.9, ticks, alignments), outcome])]))
+                align_vis.append(html.Details([html.Summary(f), html.Div([display_seq(specimen_path, param_dict, ann_dict, f, 0.9, ticks, alignments), outcome])])) # visualsation of aligned proteins
 
-            found.remove(lista[0])
+            found.remove(lista[0]) # removal of aligment arrow in chromosome view, but still there will be sequence to show information on self aligment
 
         for seq,scalers in zip(lista, scale_list):
-                visuals.append(display_seq(specimen_path, param_dict, ann_dict, seq, scalers, ticks, False))
+                visuals.append(display_seq(specimen_path, param_dict, ann_dict, seq, scalers, ticks, False)) # visualsation of chosen proteins
         
         param_df=pd.DataFrame(param_dict)
         param_df=param_df.loc[param_df['chromosome'] == chromosome]
@@ -759,8 +762,8 @@ def display_seq(specimen_path, param_dict, ann_dict, seq, scaler, ticks, name):
     param_df = pd.DataFrame(param_dict)
     annotations = pd.DataFrame(ann_dict)
     motifs = [{'protein_id': row['protein_id'],
-               'code': row['seq'],
-               'name': "asm",
+               'code': row['seq'], # way to show sequence of the amyloid on the protein
+               'name': "asm", # changed to a shorter name(easier to fit in the box)
                'start': row['seq_start'],
                'end': row['seq_end']} for index, row in param_df.iterrows()]
 
@@ -778,22 +781,22 @@ def display_seq(specimen_path, param_dict, ann_dict, seq, scaler, ticks, name):
     for amyloid in motifs:
         if amyloid['protein_id'] == seq:
             label = GraphicRecord._format_label(None, label=f"{amyloid['code']} - {amyloid['name']}", max_label_length=200, max_line_length=100)
-            motif_features = [GraphicFeature(start=amyloid['start'], end=amyloid['end'], label=label, color="#964201")] #twardo brazowy
+            motif_features = [GraphicFeature(start=amyloid['start'], end=amyloid['end'], label=label, color="#964201")] # separate GraphicFeature for amyloids to modify their labels
 
     record = GraphicRecord(sequence_length=seq_len_dict[seq], features=features, ticks_resolution=ticks)
     record_amyloid = GraphicRecord(sequence_length=seq_len_dict[seq], features=motif_features, ticks_resolution=ticks)
 
+    w_size = float(100*scaler) # way to aproximatley scale proteins to there relative sizes
     szer = float((16*scaler)+1)
     ax, _ = record.plot(figure_width=szer)
-    ax, _ = record_amyloid.plot(ax=ax, figure_width=szer, max_label_length=67, max_line_length=30)
+    ax, _ = record_amyloid.plot(ax=ax, figure_width=szer, max_label_length=67, max_line_length=30) # allowing amyloids to have longer labels so the whole sequence can fit
     plt.tight_layout()
     ploting = ax.figure
     out_url = fig_to_uri(ploting)
-    w_size = float((95*scaler)+ 5)
     if name:
-        return html.Div([html.Img(title=seq, id='cur_plot', src=out_url, style={'width': f'{w_size}%'}), html.Br(), html.Br()])
+        return html.Div([html.Img(title=seq, id='cur_plot', src=out_url, style={'width': f'{w_size}%'}), html.Br(), html.Br()]) # visualsation of aligned proteins
     else:
-        return html.Div([seq, html.Br(), html.Img(title=seq, id='cur_plot', src=out_url, style={'width': f'{w_size}%'}), html.Br(), html.Br()])
+        return html.Div([seq, html.Br(), html.Img(title=seq, id='cur_plot', src=out_url, style={'width': f'{w_size}%'}), html.Br(), html.Br()]) # visualsation of chosen proteins
 
 
 @callback(
