@@ -19,7 +19,7 @@ from quantiprot.utils.io import load_fasta_file
 from quantiprot.utils.feature import Feature, FeatureSet
 from quantiprot.metrics.entropy import entropy
 import matplotlib
-import copy # neededn to save zoom on the plot
+import copy # needed to save zoom on the plot
 
 matplotlib.use('agg')
 
