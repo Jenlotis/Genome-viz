@@ -175,7 +175,7 @@ def make_complexity(sp,vista):
     fs = FeatureSet("")
     fs.add(Feature(entropy, window=int(vista)).then(min))
     ent = [{'protein_id': s.identifier.split(" ", 1)[0], 'complexity': s.data[0]} for s in fs(seq)]
-    pd.DataFrame(ent).to_csv(f'{sp}/complexity{vista}.csv') # bc of ability to change window size of entropy there is variable that changes name of the files
+    pd.DataFrame(ent).to_csv(f'{sp}/complexity{vista}.csv') # bc of the ability to change the window size of entropy there is a variable that changes the name of the files
 
 dash.register_page(__name__, path='/analytics')
 
@@ -249,7 +249,7 @@ contents = html.Div(children=[
                 )
             ]),
             dbc.Col([ 
-                html.B('Maximum entropy for above specified window size:'), # changed label to reflect changes in hoentropy is claculated and processed  
+                html.B('Maximum entropy for above specified window size:'), # changed label to reflect changes in entropy calculations and processing  
                 html.Br(),
                 dbc.Input(
                     id='entropy-threshold',
@@ -291,7 +291,7 @@ contents = html.Div(children=[
             html.Div([
                 html.B('Select a protein:'), # merged from protein window
                 html.Br(),
-                dcc.Dropdown(multi=True, # allows to choose ultiple protein at the same time
+                dcc.Dropdown(multi=True, # allows you to choose multiple proteins at the same time
                              clearable=True,
                              searchable=True,
                              id='gene-select'
@@ -307,7 +307,7 @@ contents = html.Div(children=[
                 ]),
 
                 html.Br(),
-                html.Div([ # parameters for scoring of aligment
+                html.Div([ # parameters for scoring of alignment
                     dbc.Row([ 
                         dbc.Col([
                             html.B('Score treshold:'),
@@ -395,7 +395,7 @@ def display_parameters(specimen_path):
                                 header=None,
                                 names=['protein_id', 'protein_subid', 'protein_len', 'base', 'code', 'name', 'start',
                                        'end', 'e-value', 'mark', 'date', 'seq', 'decr']
-                                ) # moved calculation of entropy furtherdown in the code
+                                ) # moved the calculation of entropy further down in the code
     features['protein_id'] = features.apply(lambda x: x['related_accession'] if x['# feature'] == 'mRNA'
     else (x['product_accession'] if x['# feature'] == 'CDS'
           else np.nan), axis=1)
@@ -464,7 +464,7 @@ def initial_results(df_dict, ft, lst, lsbm, et, codes_list, chr_num_state, ann_d
         base_df = df[df['# feature'] == ft]
         param_df = base_df[(base_df['log_score'] >= lst)
                          & (base_df['log_bias'] + lsbm < base_df['log_score'])]
-    else: # else it is first checked if file wit specified window size exist
+    else: # else it is first checked if the file with specified window size exists
         if not glob(f'{specimen_path}/complexity{vista}.csv'):
             make_complexity(specimen_path, vista)
 
@@ -582,10 +582,10 @@ def chromosome_results(base_dict, param_dict, codes_list, viz_lvl, ann_dict, rel
                                       yanchor="bottom",
                                       y=1.02,
                                       xanchor="left",
-                                      x=0, # moved legend bc now that margins are lower it would interfeere with controls
-                                      itemclick=False, # blocked legend controls bc of the way that plot is created it didn't work in any meaningfull way
+                                      x=0, # moved legend bc now that margins are lower it would interfere with controls
+                                      itemclick=False, # blocked legend controls bc of the way that plot is created it didn't work in any meaningful way
                                       itemdoubleclick=False),
-                          margin=dict(t = 2, b = 1, l = 3, r = 3), # decreased the margins to use more of the availeble space
+                          margin=dict(t = 2, b = 1, l = 3, r = 3), # decreased the margins to use more of the available space
                           height=250
                           )
         fig.update_xaxes({'showticklabels': False})
@@ -593,7 +593,7 @@ def chromosome_results(base_dict, param_dict, codes_list, viz_lvl, ann_dict, rel
 
         if 'fig' in locals(): # source: https://community.plotly.com/t/how-to-save-current-zoom-and-position-after-filtering/5310
             fig = copy.deepcopy(fig)
-        if aligment is None or aligment is False: # blocks the zoomout during protein selection butwhen aligment is chossen it un blocksto show where aligments are located
+        if aligment is None or aligment is False: # blocks the zoom-out during protein selection but when the alignment is chosen it unblocks to show where alignments are located
             if relayout_data:
                 if 'xaxis.range[0]' in relayout_data:
                     fig['layout']['xaxis']['range'] = [
@@ -614,10 +614,10 @@ def chromosome_results(base_dict, param_dict, codes_list, viz_lvl, ann_dict, rel
     Output('single-chromosome-graph', 'style', allow_duplicate=True),
     Output('gene-select', 'options'), # removal of some callbacks due to merging of protein and chromosomal view
     Output('gene-select', 'value', allow_duplicate=True),
-    Output('sort_switch', 'style'), # changing visibility of buttons that activate new fucinalities
+    Output('sort_switch', 'style'), # changing visibility of buttons that activate new functionalities
     Output('scale_switch', 'style'),
     Output('aligment_switch', 'style'),
-    Output('score-threshold-container', 'style', allow_duplicate=True), # changing visibility of aligment score boxes
+    Output('score-threshold-container', 'style', allow_duplicate=True), # changing visibility of alignment score boxes
     State('raw-df', 'memory'),
     State('chromosome-select', 'value'),
     State('trace-dict', 'memory'),
@@ -647,8 +647,8 @@ def seq_display(base_dict, chr_num_state, trace_dict, annotation, param_dict, cl
 
 def appending(selected, annotation):
     '''
-    fuction to facilitate ability to choose many proteins as well as ability to deselect them based on 
-    the selected one and if exist at the moment list of list of allready chosen ones
+    function to facilitate the ability to choose many proteins as well as the ability to deselect them based on 
+    the selected one and if exists at the moment list of list of already chosen ones
     '''
     annotation=[annotation] if len(annotation[0]) == 1 else annotation
     if selected not in annotation:
@@ -666,17 +666,17 @@ def appending(selected, annotation):
     Output('sort_switch', 'disabled'), # activating/deactivating switches
     Output('scale_switch', 'disabled'),
     Output('aligment_switch', 'disabled'),
-    Output('align-res', 'children'), # showing all of the aligments
-    Output('score-threshold-container', 'style', allow_duplicate=True), # changeing visibility of aligment score controlls
+    Output('align-res', 'children'), # showing all of the alignments
+    Output('score-threshold-container', 'style', allow_duplicate=True), # changeing visibility of alignment score controls
     State('specimen-dropdown', 'value'),
     State('target-df', 'memory'),
     State('annotations', 'memory'),
     State('gene-select', 'value'),
     State('raw-df', 'memory'), # needed data to know order of proteins on the chromosome
     State('chromosome-select', 'value'),
-    State('open-gap', 'value'), # data about aligment scores
+    State('open-gap', 'value'), # data about alignment scores
     State('extend-gap', 'value'),
-    Input('sort_switch', 'on'), # information if user want new fucionalities
+    Input('sort_switch', 'on'), # information if user want new functionalities
     Input('scale_switch', 'on'),
     Input('aligment_switch', 'on'),
     Input('gene-select', 'value'),
@@ -714,16 +714,16 @@ def multi_viz(specimen_path, param_dict, ann_dict, annotation, raw_dict, chromos
             scale_list=[1]*len(lista)
             ticks=100
 
-        if alignments and len(lista)==1: # if one protein is chosen and it has amyloid sygnalling motiff and switch is switched the parwise globall aligment of this amyloid sequence to other  amyloid sequences on the chromosome will be performed
+        if alignments and len(lista)==1: # if one protein is chosen and it has an amyloid signalling motif and switch is switched the pairwise global alignment of this amyloid sequence to other  amyloid sequences on the chromosome will be performed
             param_df=pd.DataFrame(param_dict)
             param_df=param_df.loc[param_df['chromosome'] == chromosome]
             chosen=param_df.loc[param_df['protein_id'].isin(lista)]['seq'].values[0]
             for index, row in param_df.iterrows():
-                aligner=Align.PairwiseAligner(mode="global", open_gap_score=float(open_gap), extend_gap_score=float(extend_gap)) # choosing too leanient scores can crash the program as there could be >2^63 of valid aligments; if more granular approach is needed pls check Biopython documentation
-                aligner.substitution_matrix = substitution_matrices.load("BLOSUM62") # chosen sustitisuion matrix()
+                aligner=Align.PairwiseAligner(mode="global", open_gap_score=float(open_gap), extend_gap_score=float(extend_gap)) # choosing too lenient scores can crash the program as there could be >2^63 of valid alignments; if the more granular approach is needed pls check Biopython documentation
+                aligner.substitution_matrix = substitution_matrices.load("BLOSUM62") # chosen substitution matrix()
                 aligns=aligner.align(chosen,row["seq"])
                 for align in aligns:
-                    if align.score >= int(treshold): # only aligments with score above/the same as chosen treshold will be chosen
+                    if align.score >= int(treshold): # only alignments with a score above/the same as the chosen threshold will be chosen
                         found.append(row["protein_id"])
                     break
 
@@ -741,7 +741,7 @@ def multi_viz(specimen_path, param_dict, ann_dict, annotation, raw_dict, chromos
 
                 align_vis.append(html.Details([html.Summary(f), html.Div([display_seq(specimen_path, param_dict, ann_dict, f, 0.9, ticks, alignments), outcome])])) # visualsation of aligned proteins
 
-            found.remove(lista[0]) # removal of aligment arrow in chromosome view, but still there will be sequence to show information on self aligment
+            found.remove(lista[0]) # removal of alignment arrow in chromosome view, but still, there will be a sequence to show information on self alignment
 
         for seq,scalers in zip(lista, scale_list):
                 visuals.append(display_seq(specimen_path, param_dict, ann_dict, seq, scalers, ticks, False)) # visualsation of chosen proteins
@@ -786,7 +786,7 @@ def display_seq(specimen_path, param_dict, ann_dict, seq, scaler, ticks, name):
     record = GraphicRecord(sequence_length=seq_len_dict[seq], features=features, ticks_resolution=ticks)
     record_amyloid = GraphicRecord(sequence_length=seq_len_dict[seq], features=motif_features, ticks_resolution=ticks)
 
-    w_size = float(100*scaler) # way to aproximatley scale proteins to there relative sizes
+    w_size = float(100*scaler) # way to approximately scale proteins to their relative sizes
     szer = float((16*scaler)+1)
     ax, _ = record.plot(figure_width=szer)
     ax, _ = record_amyloid.plot(ax=ax, figure_width=szer, max_label_length=67, max_line_length=30) # allowing amyloids to have longer labels so the whole sequence can fit
